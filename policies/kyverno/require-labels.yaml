@@ -1,0 +1,30 @@
+# Etapa inicial: las policies se aplican en modo Audit.
+# Se promueven a Enforce una vez validadas las implicaciones operacionales
+# (sección 11 del plan).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-labels
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-app-owner-environment
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+                - Job
+                - CronJob
+      validate:
+        message: >-
+          Los workloads deben tener las labels `app`, `owner` y `environment`.
+        pattern:
+          metadata:
+            labels:
+              app: "?*"
+              owner: "?*"
+              environment: "?*"

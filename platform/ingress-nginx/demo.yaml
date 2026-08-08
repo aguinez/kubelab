@@ -1,0 +1,81 @@
+# App de ejemplo (nginx) que valida el flujo completo:
+#   localhost:443 -> ingress-nginx -> Service -> Pod
+# Expuesta en https://traefik.lab.test con TLS interno.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-demo
+  namespace: ingress-nginx
+  labels:
+    app: nginx-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-demo
+  template:
+    metadata:
+      labels:
+        app: nginx-demo
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27.3
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-demo
+  namespace: ingress-nginx
+spec:
+  selector:
+    app: nginx-demo
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-demo
+  namespace: ingress-nginx
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - traefik.lab.test
+      secretName: nginx-demo-tls
+  rules:
+    - host: traefik.lab.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-demo
+                port:
+                  number: 80
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nginx-demo-tls
+  namespace: ingress-nginx
+spec:
+  secretName: nginx-demo-tls
+  dnsNames:
+    - traefik.lab.test
+  issuerRef:
+    name: lab-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

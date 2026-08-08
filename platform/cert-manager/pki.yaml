@@ -1,0 +1,38 @@
+# PKI interna del laboratorio.
+#
+# Root CA de larga duración (100 años) que firma los certificados del
+# laboratorio via ClusterIssuer. Los certificados emitidos son válidos
+# 1 año (365d). Todo se resuelve bajo el dominio interno *.lab.test.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: lab-root-ca
+  namespace: cert-manager
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: lab-root-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: lab-root-ca
+  secretName: lab-root-ca-tls
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  duration: 87600h # 10 años
+  issuerRef:
+    name: lab-root-ca
+    kind: Issuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: lab-issuer
+spec:
+  ca:
+    secretName: lab-root-ca-tls

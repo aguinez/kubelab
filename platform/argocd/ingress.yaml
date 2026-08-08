@@ -1,0 +1,38 @@
+# ArgoCD UI expuesta en https://argocd.lab.test con TLS interno.
+# El chart oficial instala ArgoCD; este manifest solo añade el Ingress TLS.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server
+  namespace: argocd
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - argocd.lab.test
+      secretName: argocd-server-tls
+  rules:
+    - host: argocd.lab.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: argocd-server-tls
+  namespace: argocd
+spec:
+  secretName: argocd-server-tls
+  dnsNames:
+    - argocd.lab.test
+  issuerRef:
+    name: lab-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

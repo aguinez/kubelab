@@ -1,0 +1,17 @@
+# Kubernetes
+.kube/
+*.kubeconfig
+kubeconfig-*
+
+# Secrets / credentials
+*.pem
+*.key
+**/secrets/*.yaml
+
+# Local
+.DS_Store
+*.log
+tmp/
+
+# Herramientas
+.commandcode/
