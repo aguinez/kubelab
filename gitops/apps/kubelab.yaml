@@ -10,7 +10,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/aguinez/kubelab
+    repoURL: https://github.com/aguinez/kubelab/platform/argocd/infra-applications/
     targetRevision: HEAD
     path: clusters/local
   destination:

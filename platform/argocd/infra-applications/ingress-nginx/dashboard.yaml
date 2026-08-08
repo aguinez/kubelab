@@ -12,10 +12,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - traefik.lab.test
+        - nginx.lab.test
       secretName: nginx-dashboard-tls
   rules:
-    - host: traefik.lab.test
+    - host: nginx.lab.test
       http:
         paths:
           - path: /healthz
@@ -34,7 +34,7 @@ metadata:
 spec:
   secretName: nginx-dashboard-tls
   dnsNames:
-    - traefik.lab.test
+    - nginx.lab.test
   issuerRef:
     name: lab-issuer
     kind: ClusterIssuer

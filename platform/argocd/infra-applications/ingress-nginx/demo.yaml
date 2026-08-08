@@ -52,10 +52,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - traefik.lab.test
+        - nginx.lab.test
       secretName: nginx-demo-tls
   rules:
-    - host: traefik.lab.test
+    - host: nginx.lab.test
       http:
         paths:
           - path: /
@@ -73,9 +73,9 @@ metadata:
   namespace: ingress-nginx
 spec:
   secretName: nginx-demo-tls
-  commonName: traefik.lab.test
+  commonName: nginx.lab.test
   dnsNames:
-    - traefik.lab.test
+    - nginx.lab.test
   issuerRef:
     name: lab-issuer
     kind: ClusterIssuer
