@@ -1,45 +1,27 @@
 #!/usr/bin/env bash
-# Inicializa el repositorio de configuración local para ArgoCD y
-# despliega los Applications correspondientes.
+# Registra el repo de GitOps en ArgoCD y aplica el Application raíz.
+# Requisito: el repo ya debe existir en GitHub y tener los manifests en clusters/local.
 set -euo pipefail
 
 KIND_CONTEXT="kind-kubelab"
-GITOPS_DIR="gitops"
 ARGOCD_NS="argocd"
-SERVER="https://kubernetes.default.svc"
-
-# Repo de configuración: usamos el repo local del laboratorio
+ARGOCD_HOST="argocd.lab.test"
 REPO_URL="https://github.com/aguinez/kubelab"
-REPO_NAME="kubelab"
+APP_FILE="gitops/apps/kubelab.yaml"
 
-mkdir -p "${GITOPS_DIR}/apps"
+# Obtener token de sesión de ArgoCD (login inicial admin)
+PASS=$(kubectl --context "${KIND_CONTEXT}" -n "${ARGOCD_NS}" get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)
+TOKEN=$(curl -sk -X POST -H "Content-Type: application/json" \
+  -d "{\"username\":\"admin\",\"password\":\"${PASS}\"}" \
+  "https://${ARGOCD_HOST}/api/v1/session" | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
 
-cat > "${GITOPS_DIR}/apps/${REPO_NAME}.yaml" <<EOF
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: ${REPO_NAME}
-  namespace: ${ARGOCD_NS}
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: default
-  source:
-    repoURL: ${REPO_URL}
-    targetRevision: HEAD
-    path: clusters/local
-  destination:
-    server: ${SERVER}
-    namespace: default
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-EOF
+echo "==> Registrando repo ${REPO_URL}"
+curl -sk -X POST -H "Content-Type: application/json" -H "Authorization: Bearer ${TOKEN}" \
+  -d "{\"type\":\"git\",\"name\":\"kubelab\",\"repo\":\"${REPO_URL}\"}" \
+  "https://${ARGOCD_HOST}/api/v1/repositories" >/dev/null || true
 
-echo "==> Aplicando Application '${REPO_NAME}'"
-kubectl --context "${KIND_CONTEXT}" -n "${ARGOCD_NS}" apply -f "${GITOPS_DIR}/apps/${REPO_NAME}.yaml"
-echo "==> Application creada. Sincronizando..."
-kubectl --context "${KIND_CONTEXT}" -n "${ARGOCD_NS}" wait --for=condition=Healthy --timeout=120s application/${REPO_NAME} 2>/dev/null || true
+echo "==> Aplicando Application 'kubelab'"
+kubectl --context "${KIND_CONTEXT}" -n "${ARGOCD_NS}" apply -f "${APP_FILE}"
+
+echo "==> Sincronizando..."
+kubectl --context "${KIND_CONTEXT}" -n "${ARGOCD_NS}" wait --for=jsonpath='{.status.health.status}'=Healthy --timeout=120s application/kubelab 2>/dev/null || true

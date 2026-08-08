@@ -27,12 +27,17 @@ bootstrap:
 	@kubectl --context $(KIND_CONTEXT) -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=180s
 	@kubectl --context $(KIND_CONTEXT) apply -k platform/ingress-nginx
 	@echo "==> Instalando Kyverno"
-	@kubectl --context $(KIND_CONTEXT) apply -f https://github.com/kyverno/kyverno/releases/download/v1.12.5/install.yaml
-	@kubectl --context $(KIND_CONTEXT) -n kyverno rollout status deploy/kyverno --timeout=240s
+	@helm repo add kyverno https://kyverno.github.io/kyverno 2>/dev/null || true
+	@helm repo update kyverno 2>/dev/null || true
+	@helm upgrade --install kyverno kyverno/kyverno -n kyverno --create-namespace --version 3.8.2
+	@kubectl --context $(KIND_CONTEXT) -n kyverno rollout status deploy/kyverno-admission-controller --timeout=240s
 	@kubectl --context $(KIND_CONTEXT) apply -k policies/kyverno
 	@echo "==> Instalando ArgoCD"
+	@helm repo add argo https://argoproj.github.io/argo-helm 2>/dev/null || true
+	@helm repo update argo 2>/dev/null || true
+	@helm upgrade --install argocd argo/argo-cd -n argocd --version 10.3.0 --set server.extraArgs[0]=--insecure
+	@kubectl --context $(KIND_CONTEXT) -n argocd rollout status deploy/argocd-server --timeout=240s
 	@kubectl --context $(KIND_CONTEXT) apply -k platform/argocd
-	@kubectl --context $(KIND_CONTEXT) -n argocd rollout status deploy/argocd-server --timeout=180s
 	@echo "==> Configurando GitOps"
 	@bash scripts/gitops-init.sh
 	@echo "==> Bootstrap completado"

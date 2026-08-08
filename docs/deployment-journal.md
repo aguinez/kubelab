@@ -150,6 +150,28 @@ Cluster: `kubelab` (KinD, 3 nodos, K8s v1.31.0)
 
 ---
 
+## Fase 4 — Kyverno
+
+- **Error:** v1.12.5 (que estaba en el Makefile original) fallaba al instalar:
+  los CRDs superaban el límite de anotaciones del API server
+  (`metadata.annotations: Too long: must have at most 262144 bytes`).
+- **Solución:** usar la versión actual v1.18.2 (chart helm 3.8.2). CRDs OK.
+- Resultado: 4 controladores Running + 5 ClusterPolicies en modo Audit, con
+  policyreports generados (PASS/FAIL por workload).
+
+## Fase 5 — ArgoCD + GitOps
+
+- **Error:** puse `server.config."server.insecure"=true` en el chart, pero el
+  valor correcto es `server.extraArgs[0]=--insecure`. Sin él, la UI redirigía
+  en bucle (307). Lo corregí y la UI quedó 200.
+- **Aprendizaje:** leer los values del chart (`helm show values`) antes de
+  `--set`; los nombres de parámetros no se adivinan.
+- GitOps: registré el repo `aguinez/kubelab` en ArgoCD via API, creé la
+  Application raíz (`clusters/local`) con sync automático → **Synced/Healthy**.
+- Commit + push inicial del repo al remoto.
+
+---
+
 ## Aprendizajes consolidados hasta ahora
 
 1. **Comprobar el entorno antes de actuar:** permisos (`ls -ld`), contexto
