@@ -1,5 +1,6 @@
 # ArgoCD UI expuesta en https://argocd.lab.test con TLS interno.
 # El chart oficial instala ArgoCD; este manifest solo añade el Ingress TLS.
+# zCEEHuAgV8yNum8l
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -30,6 +31,7 @@ metadata:
   namespace: argocd
 spec:
   secretName: argocd-server-tls
+  commonName: argocd.lab.test
   dnsNames:
     - argocd.lab.test
   issuerRef:

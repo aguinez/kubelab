@@ -73,6 +73,7 @@ metadata:
   namespace: ingress-nginx
 spec:
   secretName: nginx-demo-tls
+  commonName: traefik.lab.test
   dnsNames:
     - traefik.lab.test
   issuerRef:
