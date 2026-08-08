@@ -7,11 +7,16 @@ por la CA interna del laboratorio (`lab-root-ca`).
 
 ## Resumen (lo esencial)
 
-1. Exportar la CA interna del cluster → `lab-ca.crt`
+1. Exportar la CA interna **vigente** del cluster → `lab-ca.crt`
 2. Instalar la CA en el trust store de Windows (`LocalMachine\Root`)
 3. Asegurarse de que los Certificates de los Ingress tengan `commonName`
    (sin él, el subject queda vacío y Chrome rechaza la cadena)
 4. Cerrar y reabrir el browser (Chrome cachea las decisiones TLS)
+
+> **⚠️ Importante:** si el cluster se recrea (`make destroy && make bootstrap`),
+> cert-manager genera una **CA nueva** (el secret `lab-root-ca-tls` se regenera).
+> La CA instalada en Windows queda obsoleta. Hay que repetir los pasos 1-2
+> con la CA vigente.
 
 ---
 
@@ -158,6 +163,35 @@ curl.exe -s -o NUL -w 'code=%{http_code}\n' \
 
 ---
 
+## 6. Tras recrear el cluster (CA regenerada)
+
+Cada `make destroy && make bootstrap` regenera la CA interna. Para no
+romper la confianza de Windows:
+
+```bash
+# 1. Exportar la CA VIGENTE (sobrescribe lab-ca.crt)
+kubectl get secret lab-root-ca-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' \
+  | base64 -d > lab-ca.crt
+
+# 2. Verificar que el fingerprint es el de la CA actual
+openssl x509 -in lab-ca.crt -noout -fingerprint -sha1
+
+# 3. Copiar a Windows y reemplazar en el trust store
+powershell.exe -NoProfile -Command 'Copy-Item "\\wsl.localhost\ubuntu\home\aguinez\projects\kubelab\lab-ca.crt" "C:\Temp\lab-ca.crt" -Force'
+powershell.exe -NoProfile -Command '
+$script = @"
+certutil -delstore Root <THUMBPRINT_ANTERIOR>
+certutil -addstore -f Root C:\Temp\lab-ca.crt
+"@
+Start-Process cmd -Verb RunAs -Wait -ArgumentList "/c", $script
+'
+```
+
+> El `delstore` con el thumbprint anterior es opcional pero recomendado:
+> evita que queden CAs huérfanas del mismo nombre.
+
+---
+
 ## Troubleshooting
 
 | Síntoma | Causa | Solución |
@@ -165,6 +199,7 @@ curl.exe -s -o NUL -w 'code=%{http_code}\n' \
 | `NET::ERR_CERT_AUTHORITY_INVALID` | CA no instalada | Pasos sección 2 |
 | `NET::ERR_CERT_INVALID` con CA instalada | subject vacío (sin commonName) | Sección 3 |
 | Sigue el aviso tras instalar la CA | Chrome cacheó la decisión | Sección 4 |
+| Aviso aunque la CA "esté instalada" | **La CA instalada es de un cluster anterior** (fingerprint distinto) | Comparar thumbprints (sección 2) y reinstalar la vigente |
 | `unable to verify the first certificate` (openssl) | nginx no envía la CA en la cadena | Normal; el trust store de Chrome completa la cadena con la CA instalada |
 | `code=000` con curl.exe de Windows | curl no usa trust store / formato de `--resolve` | Usar `--cacert` o validar en el browser |
 
