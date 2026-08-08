@@ -10,7 +10,13 @@ nodes:
       - containerPort: 443
         hostPort: 443
         protocol: TCP
-    nodeLabels:
+      - containerPort: 30535
+        hostPort: 30535
+        protocol: TCP
+      - containerPort: 30535
+        hostPort: 30535
+        protocol: UDP
+    labels:
       ingress-ready: "true"
   - role: worker
   - role: worker

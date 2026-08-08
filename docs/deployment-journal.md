@@ -172,6 +172,38 @@ Cluster: `kubelab` (KinD, 3 nodos, K8s v1.31.0)
 
 ---
 
+## Fase 6 — DNS interno (CoreDNS expuesto)
+
+- **Objetivo:** que Windows/WSL resuelva los `*.lab.test` de los Ingress.
+- **Error:** puse el bloque `lab.test` como subdirectiva dentro de `.:53`
+  (`Unknown directive 'lab.test'`). CoreDNS exige un **server block separado**
+  (`lab.test:53 { ... }`).
+- **Error:** el plugin `hosts` no soporta wildcard `*.lab.test` como subdominios
+  (`no next plugin found`). La solución es el plugin **`template`**:
+  ```
+  lab.test:53 {
+      errors
+      log
+      template IN A {
+          match ^.*\.lab\.test\.$
+          answer "{{ .Name }} 60 IN A 127.0.0.1"
+      }
+  }
+  ```
+- **Error:** el NodePort UDP 30535 no era alcanzable desde WSL (kind solo expone
+  los `extraPortMappings` del cluster.yaml). Hubo que **recrear el cluster**
+  añadiendo el mapeo 30535 TCP/UDP.
+- **Error:** usé `nodeLabels` en el cluster.yaml; en kind v0.24 el campo es
+  `labels`. El `kind create` falló con `field nodeLabels not found`.
+- **Aprendizaje:** CoreDNS necesita un server block por zona; el plugin
+  `template` es el estándar para wildcards; los puertos de kind se exponen solo
+  vía extraPortMappings (no sirven los NodePort arbitrarios desde WSL).
+- Resultado: `dig @127.0.0.1 -p 30535 *.lab.test` → `127.0.0.1` (NOERROR).
+- Nota: tras recrear el cluster hubo que reaplicar toda la plataforma
+  (cert-manager, ingress-nginx, kyverno, argocd, gitops) — verificado todo OK.
+
+---
+
 ## Aprendizajes consolidados hasta ahora
 
 1. **Comprobar el entorno antes de actuar:** permisos (`ls -ld`), contexto

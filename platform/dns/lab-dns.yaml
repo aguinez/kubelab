@@ -1,0 +1,67 @@
+# DNS interno del laboratorio.
+#
+# CoreDNS del cluster ya corre en kube-system. Este manifest añade:
+#   1. Una zona `lab.test` con registro wildcard (*.lab.test -> 127.0.0.1)
+#      para que los dominios de los Ingress resuelvan desde el host.
+#   2. Un Service NodePort que expone CoreDNS fuera del cluster (puerto 30535)
+#      para que Windows pueda usarlo como DNS.
+#
+# Desde Windows: añadir <IP-WSL>:5353 como DNS secundario del adaptador.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-lab
+  namespace: kube-system
+data:
+  lab.zone: |
+    .:53 {
+        errors
+        health {
+            lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+            pods insecure
+            fallthrough in-addr.arpa ip6.arpa
+            ttl 30
+        }
+        prometheus :9153
+        # Zona interna del laboratorio: wildcard *.lab.test
+        lab.test {
+            hosts {
+                127.0.0.1 argocd.lab.test traefik.lab.test
+                127.0.0.1 *.lab.test
+                fallthrough
+            }
+        }
+        forward . /etc/resolv.conf {
+            max_concurrent 1000
+        }
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coredns-lab
+  namespace: kube-system
+  labels:
+    k8s-app: kube-dns
+spec:
+  type: NodePort
+  selector:
+    k8s-app: kube-dns
+  ports:
+    - name: dns-udp
+      port: 53
+      targetPort: 53
+      nodePort: 30535
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: 53
+      nodePort: 30535
+      protocol: TCP

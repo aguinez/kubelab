@@ -26,6 +26,41 @@ bootstrap:
 	@kubectl --context $(KIND_CONTEXT) patch deploy -n ingress-nginx ingress-nginx-controller --type=strategic -p '{"spec":{"template":{"spec":{"nodeSelector":{"kubernetes.io/hostname":"kubelab-control-plane"}}}}}'
 	@kubectl --context $(KIND_CONTEXT) -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=180s
 	@kubectl --context $(KIND_CONTEXT) apply -k platform/ingress-nginx
+	@echo "==> Configurando DNS interno (*.lab.test)"
+	@kubectl --context $(KIND_CONTEXT) apply -f platform/dns/lab-dns.yaml
+	@python3 - <<'EOF'
+import subprocess, json
+corefile = """.:53 {
+    errors
+    health { lameduck 5s }
+    ready
+    kubernetes cluster.local in-addr.arpa ip6.arpa {
+       pods insecure
+       fallthrough in-addr.arpa ip6.arpa
+       ttl 30
+    }
+    prometheus :9153
+    forward . /etc/resolv.conf { max_concurrent 1000 }
+    cache 30
+    loop
+    reload
+    loadbalance
+}
+
+lab.test:53 {
+    errors
+    log
+    template IN A {
+        match ^.*\\.lab\\.test\\.$
+        answer "{{ .Name }} 60 IN A 127.0.0.1"
+    }
+}
+"""
+r = subprocess.run(["kubectl","--context","kind-kubelab","patch","cm","-n","kube-system","coredns","--type=merge","-p",json.dumps({"data":{"Corefile":corefile}})], capture_output=True, text=True)
+print(r.stdout.strip() or r.stderr.strip())
+EOF
+	@kubectl --context $(KIND_CONTEXT) -n kube-system rollout restart deploy/coredns
+	@kubectl --context $(KIND_CONTEXT) -n kube-system rollout status deploy/coredns --timeout=120s
 	@echo "==> Instalando Kyverno"
 	@helm repo add kyverno https://kyverno.github.io/kyverno 2>/dev/null || true
 	@helm repo update kyverno 2>/dev/null || true
