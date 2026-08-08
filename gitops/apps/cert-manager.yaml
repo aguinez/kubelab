@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/aguinez/kubelab.git
     targetRevision: HEAD
-    path: platform/argocd/infra-applications/clusters/namespaces
+    path: platform/argocd/clusters/local/dns/cert-manager/
   destination:
     server: https://kubernetes.default.svc
     namespace: default
