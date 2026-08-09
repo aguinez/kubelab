@@ -17,7 +17,8 @@ spec:
       releaseName: ingress-nginx
       values: |
         controller:
-          # Eliminar nodeSelector (vacío) y agregar tolerations
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet 
           nodeSelector: {}
           tolerations:
             - key: "node-role.kubernetes.io/control-plane"
