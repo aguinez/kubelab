@@ -19,25 +19,42 @@ spec:
         
         replicaCount: 1
         
+        # Recursos del controlador
         resources:
           requests:
             cpu: 10m
             memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
         
+        # Configuración del cainjector
         cainjector:
           enabled: true
           resources:
             requests:
               cpu: 10m
               memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
         
+        # Configuración del webhook (sin 'enabled' aquí)
         webhook:
-          enabled: true
+          timeoutSeconds: 5
           resources:
             requests:
               cpu: 10m
               memory: 32Mi
-          timeoutSeconds: 5
+            limits:
+              cpu: 100m
+              memory: 64Mi
+        
+        # Prometheus metrics (opcional)
+        prometheus:
+          enabled: false
+          servicemonitor:
+            enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
@@ -46,4 +63,6 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=false
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
