@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: kubelab
+  name: namespaces
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/aguinez/kubelab.git
     targetRevision: HEAD
-    path: platform/argocd/infra-applications/clusters/local/namespaces
+    path: clusters/local/infra-applications/namespaces/
   destination:
     server: https://kubernetes.default.svc
     namespace: default

@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/aguinez/kubelab.git
     targetRevision: HEAD
-    path: platform/argocd/clusters/local/ingress-nginx/
+    path: clusters/local/infra-applications/ingress-nginx/
   destination:
     server: https://kubernetes.default.svc
     namespace: default
