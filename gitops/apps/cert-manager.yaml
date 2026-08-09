@@ -8,15 +8,42 @@ metadata:
 spec:
   project: infra
   source:
-    repoURL: https://github.com/aguinez/kubelab.git
-    targetRevision: HEAD
-    path: clusters/local/infra-applications/cert-manager/
+    repoURL: https://charts.jetstack.io
+    chart: cert-manager
+    targetRevision: v1.16.1
+    helm:
+      releaseName: cert-manager
+      values: |
+        crds:
+          enabled: true
+        
+        replicaCount: 1
+        
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        
+        cainjector:
+          enabled: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+        
+        webhook:
+          enabled: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          timeoutSeconds: 5
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: cert-manager
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true
+      - CreateNamespace=false
