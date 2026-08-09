@@ -10,36 +10,15 @@ spec:
   source:
     repoURL: https://charts.jetstack.io
     chart: cert-manager
-    targetRevision: v1.16.1 # O la versión que prefieras
+    targetRevision: v1.15.3
     helm:
       releaseName: cert-manager
       values: |
-        # Campo correcto para instalar CRDs
-        crds:
-          enabled: true
-        
-        # Configuración del controlador
+        installCRDs: true
         replicaCount: 1
-        resources:
-          requests:
-            cpu: 10m
-            memory: 32Mi
-        
-        # Configuración del cainjector (sin cambios)
-        cainjector:
-          enabled: true
-          resources:
-            requests:
-              cpu: 10m
-              memory: 32Mi
-        
-        # Configuración del webhook (SIN 'enabled')
         webhook:
+          enabled: true
           timeoutSeconds: 5
-          resources:
-            requests:
-              cpu: 10m
-              memory: 32Mi
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
