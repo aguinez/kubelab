@@ -6,6 +6,7 @@ kind: Ingress
 metadata:
   name: argocd-server
   namespace: argocd
+  # Sin annotations de redirección
 spec:
   ingressClassName: nginx
   tls:
