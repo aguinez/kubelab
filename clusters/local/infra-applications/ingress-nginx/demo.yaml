@@ -1,22 +1,21 @@
 # App de ejemplo (nginx) que valida el flujo completo:
 #   localhost:443 -> ingress-nginx -> Service -> Pod
-# Expuesta en https://traefik.lab.test con TLS interno.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-demo
+  name: nginx
   namespace: ingress-nginx
   labels:
-    app: nginx-demo
+    app: nginx
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nginx-demo
+      app: nginx
   template:
     metadata:
       labels:
-        app: nginx-demo
+        app: nginx
     spec:
       containers:
         - name: nginx
@@ -34,7 +33,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx-demo
+  name: nginx
   namespace: ingress-nginx
 spec:
   selector:
@@ -46,14 +45,14 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: nginx-demo
+  name: nginx
   namespace: ingress-nginx
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
         - nginx.lab.test
-      secretName: nginx-demo-tls
+      secretName: nginx-ingress-tls
   rules:
     - host: nginx.lab.test
       http:
@@ -62,17 +61,17 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: nginx-demo
+                name: nginx
                 port:
                   number: 80
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: nginx-demo-tls
+  name: nginx-ingress-tls
   namespace: ingress-nginx
 spec:
-  secretName: nginx-demo-tls
+  secretName: nginx-ingress-tls
   commonName: nginx.lab.test
   dnsNames:
     - nginx.lab.test

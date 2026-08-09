@@ -73,3 +73,9 @@ bash scripts/update-hosts.sh   # detecta los Ingress y actualiza ambos hosts
 ArgoCD sincroniza el estado deseado desde el repo Git. Toda modificación
 a la plataforma debe hacerse en Git y sincronizarse, nunca con `kubectl apply` directo
 sobre recursos gestionados.
+
+
+
+
+kubectl port-forward svc/argocd-server -n argocd 8080:80
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
