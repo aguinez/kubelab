@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: github-repo-creds
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: git
+  url: https://github.com/aguinez/kubelab.git
+  username: x-access-token
+  password: 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
