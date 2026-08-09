@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/aguinez/kubelab.git
     targetRevision: main
-    path: clusters/local/infra-applications/
+    path: gitops/apps/
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
