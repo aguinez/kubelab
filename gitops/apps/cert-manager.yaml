@@ -6,55 +6,40 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  project: infra
+  project: default
   source:
     repoURL: https://charts.jetstack.io
     chart: cert-manager
-    targetRevision: v1.16.1
+    targetRevision: v1.16.1 # O la versión que prefieras
     helm:
       releaseName: cert-manager
       values: |
+        # Campo correcto para instalar CRDs
         crds:
           enabled: true
         
+        # Configuración del controlador
         replicaCount: 1
-        
-        # Recursos del controlador
         resources:
           requests:
             cpu: 10m
             memory: 32Mi
-          limits:
-            cpu: 100m
-            memory: 128Mi
         
-        # Configuración del cainjector
+        # Configuración del cainjector (sin cambios)
         cainjector:
           enabled: true
           resources:
             requests:
               cpu: 10m
               memory: 32Mi
-            limits:
-              cpu: 100m
-              memory: 128Mi
         
-        # Configuración del webhook (sin 'enabled' aquí)
+        # Configuración del webhook (SIN 'enabled')
         webhook:
           timeoutSeconds: 5
           resources:
             requests:
               cpu: 10m
               memory: 32Mi
-            limits:
-              cpu: 100m
-              memory: 64Mi
-        
-        # Prometheus metrics (opcional)
-        prometheus:
-          enabled: false
-          servicemonitor:
-            enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
@@ -64,5 +49,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - PrunePropagationPolicy=foreground
-      - PruneLast=true
