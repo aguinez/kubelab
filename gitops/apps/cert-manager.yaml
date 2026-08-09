@@ -27,4 +27,30 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true
+      - CreateNamespace=false
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-issuers
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"  # Espera a que cert-manager esté listo
+spec:
+  project: infra
+  source:
+    repoURL: https://github.com/aguinez/kubelab.git
+    targetRevision: main
+    path: clusters/local/infra-applications/cert-manager-issuers  # Ruta donde guardes estos YAMLs
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
