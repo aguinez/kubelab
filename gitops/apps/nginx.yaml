@@ -12,11 +12,17 @@ spec:
   source:
     repoURL: https://kubernetes.github.io/ingress-nginx
     chart: ingress-nginx
-    targetRevision: 4.12.0  # Última versión estable del chart
+    targetRevision: 4.12.0
     helm:
       releaseName: ingress-nginx
       values: |
         controller:
+          # Eliminar nodeSelector (vacío) y agregar tolerations
+          nodeSelector: {}
+          tolerations:
+            - key: "node-role.kubernetes.io/control-plane"
+              operator: "Exists"
+              effect: "NoSchedule"
           admissionWebhooks:
             enabled: true
             patch:
@@ -45,4 +51,4 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true
+      - CreateNamespace=false
