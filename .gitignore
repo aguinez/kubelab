@@ -15,3 +15,5 @@ tmp/
 
 # Herramientas
 .commandcode/
+
+platform/argocd/github-creds.yaml
