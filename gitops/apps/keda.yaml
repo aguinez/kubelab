@@ -16,7 +16,6 @@ spec:
     helm:
       releaseName: keda
       values: |
-        # KEDA Operator
         operator:
           replicaCount: 1
           resources:
@@ -26,8 +25,6 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
-        
-        # Metrics Server (para HPA)
         metricsServer:
           replicaCount: 1
           resources:
@@ -37,27 +34,20 @@ spec:
             limits:
               cpu: 250m
               memory: 256Mi
-        
-        # Webhook de validación
         webhooks:
           enabled: true
           replicaCount: 1
-        
-        # RBAC
         rbac:
           create: true
-          aggregateToDefaultRoles: false
-        
-        # ServiceAccount
         serviceAccount:
           create: true
-          automountServiceAccountToken: true
   destination:
     server: https://kubernetes.default.svc
     namespace: keda
   syncPolicy:
-    syncOptions:
-    - ServerSideApply=true
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true 
