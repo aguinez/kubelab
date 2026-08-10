@@ -1,0 +1,63 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keda
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: infra
+  source:
+    repoURL: https://kedacore.github.io/charts
+    chart: keda
+    targetRevision: 2.19.0
+    helm:
+      releaseName: keda
+      values: |
+        # KEDA Operator
+        operator:
+          replicaCount: 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+        
+        # Metrics Server (para HPA)
+        metricsServer:
+          replicaCount: 1
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+        
+        # Webhook de validación
+        webhooks:
+          enabled: true
+          replicaCount: 1
+        
+        # RBAC
+        rbac:
+          create: true
+          aggregateToDefaultRoles: false
+        
+        # ServiceAccount
+        serviceAccount:
+          create: true
+          automountServiceAccountToken: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keda
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
