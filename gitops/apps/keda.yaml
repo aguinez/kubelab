@@ -56,8 +56,8 @@ spec:
     server: https://kubernetes.default.svc
     namespace: keda
   syncPolicy:
+    syncOptions:
+    - ServerSideApply=true
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=false
