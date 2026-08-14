@@ -1,0 +1,209 @@
+# ============================================
+# ARGOCD - HA / ESCALABLE (CON SHARDING)
+# Chart: argo-cd | Version: 9.5.21 | ArgoCD: v3.5.1
+# ============================================
+
+global:
+  image:
+    tag: v3.5.1
+
+# ============================================
+# CONTROLLER (SHARDING)
+# ============================================
+controller:
+  enabled: true
+  replicas: 3
+  sharding:
+    enabled: true
+    algorithm: consistent-hashing
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  extraArgs:
+    - --status-processors=5
+    - --operation-processors=3
+    - --app-resync=60
+    - --app-hard-resync=180
+  env:
+    - name: ARGOCD_CONTROLLER_REPLICAS
+      value: "3"
+    - name: ARGOCD_SHARD_ALGORITHM
+      value: "consistent-hashing"
+  metrics:
+    enabled: false
+
+# ============================================
+# REPO-SERVER
+# ============================================
+repoServer:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  extraArgs:
+    - --parallelismlimit=5
+  autoscaling:
+    enabled: false
+  metrics:
+    enabled: false
+
+# ============================================
+# REDIS
+# ============================================
+redis:
+  enabled: true
+  replicas: 3
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  sentinel:
+    enabled: true
+    replicas: 3
+    resources:
+      requests:
+        cpu: 5m
+        memory: 32Mi
+      limits:
+        cpu: 50m
+        memory: 64Mi
+  metrics:
+    enabled: false
+  cluster:
+    enabled: true
+    nodes: 3
+    replicasPerNode: 1
+  persistence:
+    enabled: false
+
+# ============================================
+# SERVER
+# ============================================
+server:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  service:
+    type: NodePort
+    ports:
+      - name: http
+        port: 80
+        targetPort: 8080
+        nodePort: 30080
+      - name: https
+        port: 443
+        targetPort: 8080
+        nodePort: 30443
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - argocd.lab.test
+    tls:
+      - hosts:
+          - argocd.lab.test
+        secretName: argocd-server-tls
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+  extraArgs:
+    - --insecure
+  metrics:
+    enabled: false
+
+# ============================================
+# NOTIFICATIONS
+# ============================================
+notifications:
+  enabled: false
+
+# ============================================
+# APPLICATION SET
+# ============================================
+applicationSet:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# ============================================
+# CONFIGURACIONES
+# ============================================
+configs:
+  params:
+    controller.sharding.algorithm: "consistent-hashing"
+    controller.replicas: "2"
+    controller.status.processors: "5"
+    controller.operation.processors: "3"
+    # timeout.reconciliation: "60s"  # ← ELIMINADO
+    app.resync: "60"
+    app.hard.resync: "180"
+    server.insecure: "true"
+  
+  cm:
+    application.instanceLabelKey: argocd.argoproj.io/instance
+    url: https://argocd.lab.test
+    admin.enabled: "true"
+    app.resync: "60"  # ← Añadido
+    app.hard.resync: "180"  # ← Añadido
+    log.level: warn
+  
+  secret:
+    createSecret: true
+
+# ============================================
+# RBAC
+# ============================================
+rbac:
+  create: true
+  policy: |
+    g, system:cluster-admins, role:admin
+  policy.default: role:readonly
+  scopes: '[groups]'
+
+# ============================================
+# SERVICE ACCOUNTS
+# ============================================
+serviceAccounts:
+  create: true
+
+# ============================================
+# PERMISOS DE CLUSTER
+# ============================================
+clusterCredentials:
+  createClusterScopedResources: true
+  clusterAdminAccess:
+    enabled: true
+  createAggregatedClusterRoles: true
+
+# ============================================
+# OTRAS CONFIGURACIONES
+# ============================================
+dex:
+  enabled: false
+
+persistence:
+  enabled: false

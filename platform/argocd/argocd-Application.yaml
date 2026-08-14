@@ -1,0 +1,183 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/argoproj/argo-helm.git
+    chart: argo-cd
+    targetRevision: 9.5.21
+    helm:
+      releaseName: argocd
+      values: |
+        # === VERSIÓN DE ARGOCD ===
+        global:
+          image:
+            tag: v3.5.1
+          
+        # === CONTROLLER (ESCALABLE CON SHARDING) ===
+        controller:
+          replicas: 3                     # 3 shards en paralelo
+          resources:
+            requests:
+              cpu: 30m
+              memory: 64Mi
+            limits:
+              cpu: 1
+              memory: 2Gi
+          sharding:
+            enabled: true
+            algorithm: consistent-hashing  # Distribución uniforme de carga
+          # Configuración adicional del sharding vía CMD params
+          extraArgs:
+            - --status-processors=20
+            - --operation-processors=10
+            - --reconciliation-timeout=180s
+        
+        # === REPO-SERVER (ALTA DISPONIBILIDAD) ===
+        repoServer:
+          replicas: 2
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          autoscaling:
+            enabled: false
+          service:
+            type: ClusterIP
+          
+        # === REDIS (CLUSTER MODE PARA HA) ===
+        redis:
+          replicas: 3                     # Cluster Redis para alta disponibilidad
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+          # Redis Cluster (sentinel) para HA
+          sentinel:
+            enabled: true
+            replicas: 3
+            resources:
+              requests:
+                cpu: 20m
+                memory: 64Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+        
+        # === SERVER (UI + API) ===
+        server:
+          replicas: 2
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 512Mi
+          service:
+            type: NodePort
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts:
+              - argocd.lab.test
+            tls:
+              - hosts:
+                  - argocd.lab.test
+                secretName: argocd-server-tls
+          extraArgs:
+            - --insecure
+            - --disable-auth=false
+        
+        # === CONFIGURACIONES ADICIONALES ===
+        configs:
+          # Configuración de parámetros de ArgoCD
+          params:
+            # Timeouts y performance
+            controller.status.processors: "20"
+            controller.operation.processors: "10"
+            timeout.reconciliation: "180s"
+            # Sharding explícito
+            controller.sharding.algorithm: "consistent-hashing"
+            controller.replicas: "3"
+          
+          # ConfigMap general
+          cm:
+            # Etiqueta para identificar aplicaciones
+            application.instanceLabelKey: argocd.argoproj.io/instance
+            # URL de la UI
+            url: https://argocd.lab.test
+            # Configuración de notificaciones
+            admin.enabled: "true"
+          
+          # Secret para credenciales de admin (se genera automáticamente)
+          secret:
+            createSecret: true
+            # Si quieres fijar la contraseña de admin (opcional):
+            # argocdServerAdminPassword: "$2a$10$..."  # bcrypt hash
+        
+        # === RBAC ===
+        rbac:
+          create: true
+          policy: |
+            g, system:cluster-admins, role:admin
+          policy.default: role:readonly
+          scopes: '[groups]'
+          
+        # === SERVICE ACCOUNTS ===
+        serviceAccounts:
+          create: true
+          server:
+            name: argocd-server
+          controller:
+            name: argocd-application-controller
+          repoServer:
+            name: argocd-repo-server
+          
+        # === OTRAS CONFIGURACIONES ===
+        # Deshabilitar aplicaciones no necesarias en desarrollo
+        notifications:
+          enabled: true
+          replicas: 1
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+        
+        applicationSet:
+          enabled: true
+          replicas: 1
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
