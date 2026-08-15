@@ -18,8 +18,9 @@ spec:
       values: |
         controller:
           hostNetwork: true
-          dnsPolicy: ClusterFirstWithHostNet 
-          nodeSelector: {}
+          dnsPolicy: ClusterFirstWithHostNet
+          nodeSelector:
+            kubernetes.io/hostname: kubelab-control-plane
           tolerations:
             - key: "node-role.kubernetes.io/control-plane"
               operator: "Exists"
@@ -52,7 +53,8 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=false
+      - CreateNamespace=true
+      - ServerSideApply=true
 
 ---
 apiVersion: argoproj.io/v1alpha1
