@@ -17,8 +17,6 @@ spec:
       labels:
         app: nginx
     spec:
-      hostNetwork: true
-      dnsPolicy: "ClusterFirstWithHostNet"
       containers:
         - name: nginx
           image: nginx:1.27.3
@@ -39,7 +37,7 @@ metadata:
   namespace: ingress-nginx
 spec:
   selector:
-    app: nginx-demo
+    app: nginx
   ports:
     - port: 80
       targetPort: 80
