@@ -1,0 +1,1 @@
+helm upgrade argocd argo/argo-cd   --namespace argocd   --version 9.5.21   --values argocd-values-ha.yaml

@@ -12,29 +12,28 @@ global:
 # ============================================
 controller:
   enabled: true
-  replicas: 3
+  replicas: 2
   sharding:
     enabled: true
     algorithm: consistent-hashing
   resources:
     requests:
       cpu: 10m
-      memory: 64Mi
+      memory: 128Mi
     limits:
       cpu: 200m
-      memory: 256Mi
+      memory: 512Mi
   extraArgs:
     - --status-processors=5
     - --operation-processors=3
     - --app-resync=60
     - --app-hard-resync=180
-  env:
-    - name: ARGOCD_CONTROLLER_REPLICAS
-      value: "3"
-    - name: ARGOCD_SHARD_ALGORITHM
-      value: "consistent-hashing"
+    - --metrics-port=8082
   metrics:
-    enabled: false
+    enabled: true
+    port: 8082
+    serviceMonitor:
+      enabled: false  # Desactivado si no tienes Prometheus
 
 # ============================================
 # REPO-SERVER
@@ -53,8 +52,12 @@ repoServer:
     - --parallelismlimit=5
   autoscaling:
     enabled: false
+  # ✅ METRICS HABILITADAS
   metrics:
-    enabled: false
+    enabled: true
+    port: 8084
+    serviceMonitor:
+      enabled: false
 
 # ============================================
 # REDIS
@@ -79,8 +82,12 @@ redis:
       limits:
         cpu: 50m
         memory: 64Mi
+  # ✅ METRICS HABILITADAS
   metrics:
-    enabled: false
+    enabled: true
+    port: 9121
+    serviceMonitor:
+      enabled: false
   cluster:
     enabled: true
     nodes: 3
@@ -126,8 +133,12 @@ server:
       nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
   extraArgs:
     - --insecure
+  # ✅ METRICS HABILITADAS
   metrics:
-    enabled: false
+    enabled: true
+    port: 8083
+    serviceMonitor:
+      enabled: false
 
 # ============================================
 # NOTIFICATIONS
@@ -158,17 +169,23 @@ configs:
     controller.replicas: "2"
     controller.status.processors: "5"
     controller.operation.processors: "3"
-    # timeout.reconciliation: "60s"  # ← ELIMINADO
     app.resync: "60"
     app.hard.resync: "180"
     server.insecure: "true"
+    # ✅ METRICS CONFIGURATION
+    metrics.enabled: "true"
+    metrics.port: "8082"
+    repo.metrics.enabled: "true"
+    repo.metrics.port: "8084"
+    server.metrics.enabled: "true"
+    server.metrics.port: "8083"
   
   cm:
     application.instanceLabelKey: argocd.argoproj.io/instance
     url: https://argocd.lab.test
     admin.enabled: "true"
-    app.resync: "60"  # ← Añadido
-    app.hard.resync: "180"  # ← Añadido
+    app.resync: "60"
+    app.hard.resync: "180"
     log.level: warn
   
   secret:
