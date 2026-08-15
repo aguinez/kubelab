@@ -17,6 +17,8 @@ spec:
       labels:
         app: nginx
     spec:
+      hostNetwork: true,
+      dnsPolicy: "ClusterFirstWithHostNet"
       containers:
         - name: nginx
           image: nginx:1.27.3
