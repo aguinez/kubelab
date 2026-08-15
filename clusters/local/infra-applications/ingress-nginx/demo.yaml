@@ -17,6 +17,7 @@ spec:
       labels:
         app: nginx
     spec:
+      # ✅ SIN hostNetwork
       containers:
         - name: nginx
           image: nginx:1.27.3
@@ -37,7 +38,7 @@ metadata:
   namespace: ingress-nginx
 spec:
   selector:
-    app: nginx
+    app: nginx  # ← Asegúrate que coincida con el label
   ports:
     - port: 80
       targetPort: 80
