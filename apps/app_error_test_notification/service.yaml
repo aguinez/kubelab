@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-error-test
+  namespace: apps
+  labels:
+    app: app-error-test
+    owner: platform
+    environment: lab
+spec:
+  selector:
+    app: app-error-test
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

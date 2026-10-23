@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  # Webhook expuesto por apps/webhook (Service "webhook" en el ns "apps").
+  service.webhook.kubelab: |
+    url: http://webhook.apps.svc.cluster.local
+    headers:
+      - name: Content-Type
+        value: application/json
+
+  # Cuerpo que recibe el webhook: incluye el nombre de la aplicacion con problemas.
+  template.app-problem: |
+    webhook:
+      kubelab:
+        method: POST
+        path: /
+        body: |
+          {
+            "app": "{{.app.metadata.name}}",
+            "project": "{{.app.spec.project}}",
+            "health": "{{.app.status.health.status}}",
+            "sync": "{{.app.status.sync.status}}"
+          }
+
+  # Se dispara cuando una aplicacion queda Degraded o OutOfSync.
+  trigger.on-app-problem: |
+    - when: app.status.health.status == 'Degraded'
+      send: [app-problem]
+    - when: app.status.sync.status == 'OutOfSync'
+      send: [app-problem]
+
+  # Todas las aplicaciones quedan suscritas al webhook "kubelab".
+  subscriptions: |
+    - recipients:
+        - kubelab
+      triggers:
+        - on-app-problem

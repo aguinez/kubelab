@@ -1,6 +1,6 @@
 # ============================================
 # ARGOCD - HA / ESCALABLE (CON SHARDING)
-# Chart: argo-cd | Version: 9.5.21 | ArgoCD: v3.5.1
+# Chart: argo-cd | Version: 10.3.3 | ArgoCD: v3.5.1
 # ============================================
 
 global:
@@ -15,6 +15,7 @@ controller:
   replicas: 2
   sharding:
     enabled: true
+    replicas: 2
     algorithm: consistent-hashing
   resources:
     requests:
@@ -33,7 +34,7 @@ controller:
     enabled: true
     port: 8082
     serviceMonitor:
-      enabled: false  # Desactivado si no tienes Prometheus
+      enabled: false
 
 # ============================================
 # REPO-SERVER
@@ -52,7 +53,6 @@ repoServer:
     - --parallelismlimit=5
   autoscaling:
     enabled: false
-  # ✅ METRICS HABILITADAS
   metrics:
     enabled: true
     port: 8084
@@ -82,7 +82,6 @@ redis:
       limits:
         cpu: 50m
         memory: 64Mi
-  # ✅ METRICS HABILITADAS
   metrics:
     enabled: true
     port: 9121
@@ -119,21 +118,6 @@ server:
         port: 443
         targetPort: 8080
         nodePort: 30443
-  ingress:
-    enabled: true
-    ingressClassName: nginx
-    hosts:
-      - argocd.lab.test
-    tls:
-      - hosts:
-          - argocd.lab.test
-        secretName: argocd-server-tls
-    annotations:
-      nginx.ingress.kubernetes.io/ssl-redirect: "false"
-      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
-  extraArgs:
-    - --insecure
-  # ✅ METRICS HABILITADAS
   metrics:
     enabled: true
     port: 8083
@@ -144,7 +128,19 @@ server:
 # NOTIFICATIONS
 # ============================================
 notifications:
-  enabled: false
+  enabled: true
+  argocdUrl: https://argocd.lab.test
+  # El ConfigMap argocd-notifications-cm lo gestiona el repo
+  # (platform/argocd/notifications), no el chart, para evitar colisiones.
+  cm:
+    create: false
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
 
 # ============================================
 # APPLICATION SET
@@ -166,13 +162,14 @@ applicationSet:
 configs:
   params:
     controller.sharding.algorithm: "consistent-hashing"
+    controller.sharding.enabled: "true"
+    controller.sharding.replicas: "2"
     controller.replicas: "2"
     controller.status.processors: "5"
     controller.operation.processors: "3"
     app.resync: "60"
     app.hard.resync: "180"
     server.insecure: "true"
-    # ✅ METRICS CONFIGURATION
     metrics.enabled: "true"
     metrics.port: "8082"
     repo.metrics.enabled: "true"

@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-error-test
+  namespace: apps
+  labels:
+    app: app-error-test
+    owner: platform
+    environment: lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-error-test
+  template:
+    metadata:
+      labels:
+        app: app-error-test
+        owner: platform
+        environment: lab
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: app-error-test
+          image: kubelab/app-error-test:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: FAIL_AFTER_SECONDS
+              value: "30"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            privileged: false
+            capabilities:
+              drop:
+                - ALL
