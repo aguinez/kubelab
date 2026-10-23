@@ -9,10 +9,11 @@ metadata:
     environment: lab
 spec:
   replicas: 1
-  # ArgoCD marca el Deployment como Degraded cuando aparece la condicion
-  # ProgressDeadlineExceeded; con este valor el fallo se detecta en ~30s
-  # en lugar de los 600s por defecto.
+  # El pod vive FAIL_AFTER_SECONDS y muere antes de cumplir minReadySeconds,
+  # asi que el ReplicaSet nunca llega a "available", el rollout no completa y
+  # ArgoCD marca el Deployment como Degraded (ProgressDeadlineExceeded).
   progressDeadlineSeconds: 30
+  minReadySeconds: 60
   selector:
     matchLabels:
       app: app-error-test
