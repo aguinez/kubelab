@@ -204,6 +204,70 @@ Cluster: `kubelab` (KinD, 3 nodos, K8s v1.31.0)
 
 ---
 
+## Fase — Notificaciones de ArgoCD (app que falla + webhook)
+
+Fecha: 2026-10-23
+
+### Objetivo
+Siguiendo `task_notification.MD`: (1) una app que falle tras N segundos (default
+30), (2) un webhook que reciba e imprima el nombre de la app con problemas que
+envía el notifications controller de ArgoCD, y (3) la configuración de las
+notificaciones en `platform/argocd`.
+
+### Qué hice
+- `apps/app_error_test_notification/`: `app.py` (servidor HTTP que hace
+  `os._exit(1)` pasados `FAIL_AFTER_SECONDS`), Dockerfile, Deployment y Service.
+- `apps/webhook/`: `webhook.py` (parsea el payload JSON e imprime el nombre de la
+  app), Dockerfile, Deployment y Service.
+- `platform/argocd/notifications/argocd-notifications-cm.yaml`: ConfigMap con
+  `service.webhook.kubelab`, `template.app-problem`, `trigger.on-app-problem` y la
+  `subscriptions` global.
+- `gitops/apps/`: ArgoCD Applications para las dos apps y para el ConfigMap.
+
+### Errores y cosas que asumí sin comprobar
+- **Las imágenes `ghcr.io/aguinez/...` no existían.** Asumí que había registro/CI;
+  no hay. El pod quedaba en `ImagePullBackOff`. Solución: construir en local y
+  cargar con `kind load docker-image`, usando nombres locales
+  (`kubelab/app-error-test:1.0.0`) y `imagePullPolicy: IfNotPresent`.
+- **El builder de Docker Desktop añade attestations (manifest lists).** El primer
+  build generó un manifest list con provenance; en KinD el kubelet puede no
+  resolver la plataforma. Lo resolví con `--provenance=false --sbom=false`.
+- **`/tmp` del nodo KinD es tmpfs.** Un `docker cp` a `/tmp` "tenía éxito" pero el
+  archivo no aparecía dentro del contenedor (quedaba oculto por el tmpfs). Hay que
+  copiar a una ruta del overlay (p.ej. `/root`).
+- **Asumí que el notifications controller estaba instalado.** No lo estaba: el
+  chart `argo-cd` trae `notifications.enabled=false` por defecto. Lo habilité vía
+  Helm (`notifications.enabled=true`) y puse `notifications.cm.create=false` para
+  que el ConfigMap sea propiedad del repo y no del chart.
+- **Asumí que ArgoCD marca Degraded un Deployment que crashea.** No: ArgoCD solo
+  marca Degraded cuando aparece la condición `ProgressDeadlineExceeded`. Mientras
+  el pod alcanza a estar Ready una vez, el rollout "completa" y la app se queda
+  alternando `Healthy`/`Progressing`.
+- **Error de validación:** `progressDeadlineSeconds: 30` con
+  `minReadySeconds: 60` es inválido (`must be greater than minReadySeconds`). El
+  sync de ArgoCD falló con `SyncError` hasta corregirlo.
+- **Operé el cluster desde dentro del nodo** (`docker exec kubelab-control-plane
+  kubectl ...`): desde WSL el API server en `127.0.0.1:42527` reseteaba la conexión
+  TLS. No era el cluster (dentro del nodo respondía perfecto).
+
+### Cómo queda funcionando
+- El pod vive 30s y muere; con `minReadySeconds: 45` (mayor que la vida del pod)
+  el ReplicaSet nunca queda "available" → `progressDeadlineSeconds: 60` →
+  `ProgressDeadlineExceeded` → ArgoCD lo reporta **Degraded** (estable).
+- `trigger.on-app-problem` matchea `health == 'Degraded'` y envía al webhook
+  `kubelab` (`http://webhook.apps.svc.cluster.local`).
+- Verificado en logs del webhook:
+  `[webhook] application with problems: app-error-test`.
+
+### Construir y cargar las imágenes (repetible)
+```bash
+docker build --provenance=false --sbom=false -t kubelab/app-error-test:1.0.0 apps/app_error_test_notification
+docker build --provenance=false --sbom=false -t kubelab/webhook:1.0.0 apps/webhook
+kind load docker-image --name kubelab kubelab/app-error-test:1.0.0 kubelab/webhook:1.0.0
+```
+
+---
+
 ## Aprendizajes consolidados hasta ahora
 
 1. **Comprobar el entorno antes de actuar:** permisos (`ls -ld`), contexto
@@ -229,6 +293,19 @@ Cluster: `kubelab` (KinD, 3 nodos, K8s v1.31.0)
     ingress-nginx publica uno específico para KinD. No reinventar.
 12. **Rollout restart en pods con hostPort causa deadlock:** usar scale down/up
     para liberar puertos.
+13. **Sin registro, las imágenes de un lab KinD se cargan con
+    `kind load docker-image`** (+ `imagePullPolicy: IfNotPresent`) y conviene
+    construir con `--provenance=false --sbom=false` para evitar manifest lists
+    con attestations que el kubelet no resuelve.
+14. **ArgoCD solo reporta Degraded (Deployment) con `ProgressDeadlineExceeded`:**
+    el rollout no debe llegar a completar. Si el pod alcanza a estar Ready, la app
+    alterna `Healthy`/`Progressing` aunque crashee. `minReadySeconds` mayor que la
+    vida del pod lo fuerza.
+15. **`progressDeadlineSeconds` debe ser mayor que `minReadySeconds`** (validación
+    del API server); si no, el sync de ArgoCD falla con `SyncError`.
+16. **El ConfigMap de notificaciones puede ser propiedad del repo** habilitando el
+    controller con `notifications.enabled=true` y `notifications.cm.create=false`
+    en el chart `argo-cd`.
 
 ---
 
