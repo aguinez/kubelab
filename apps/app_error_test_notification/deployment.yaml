@@ -9,6 +9,10 @@ metadata:
     environment: lab
 spec:
   replicas: 1
+  # ArgoCD marca el Deployment como Degraded cuando aparece la condicion
+  # ProgressDeadlineExceeded; con este valor el fallo se detecta en ~30s
+  # en lugar de los 600s por defecto.
+  progressDeadlineSeconds: 30
   selector:
     matchLabels:
       app: app-error-test
