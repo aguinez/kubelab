@@ -326,6 +326,11 @@ definido.
   categorías `CrashLoopBackOff`, `ProbeFailed` y `ProgressDeadlineExceeded`.
 - Dedup: un segundo POST mientras hay un workflow activo devuelve
   `action=skipped`.
+- Los pods del workflow se **conservan** (quité `podGC: OnPodCompletion`) hasta
+  que el `ttlStrategy` (1h) borra el workflow, para poder revisar con
+  `kubectl -n argo logs -l workflows.argoproj.io/workflow=<wf> -c main` lo que
+  imprimió cada paso. El informe también queda en `describe wf`, bajo
+  `Nodes → collect-diagnostics → Outputs → Parameters → report`.
 
 ### Construir y cargar la imagen del diagnóstico (repetible)
 ```bash
