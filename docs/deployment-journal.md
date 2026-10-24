@@ -326,6 +326,12 @@ definido.
   categorías `CrashLoopBackOff`, `ProbeFailed` y `ProgressDeadlineExceeded`.
 - Dedup: un segundo POST mientras hay un workflow activo devuelve
   `action=skipped`.
+- El servicio deja el informe como **archivo dentro de su propio pod**
+  (`/tmp/report.json`, configurable con `REPORT_FILE`). Como el pod del Deployment
+  está siempre `Running`, se lee directo (sin jsonpath):
+  `kubectl -n apps exec deploy/argocd-diagnostician -- cat /tmp/report.json`.
+  Ojo: un pod ya **terminado** no se puede `exec`-ear, así que dejar el archivo en
+  los pods del workflow no sirve para leerlo después.
 - Los pods del workflow se **conservan** (quité `podGC: OnPodCompletion`) hasta
   que el `ttlStrategy` (1h) borra el workflow, para poder revisar con
   `kubectl -n argo logs -l workflows.argoproj.io/workflow=<wf> -c main` lo que
