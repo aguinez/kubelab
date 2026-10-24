@@ -1,0 +1,47 @@
+# RBAC del webhook.
+#
+# El webhook deja de solo escribir el log y pasa a lanzar la canalizacion: crea
+# objetos `Workflow` (argoproj.io) en el namespace `argo` a partir del
+# WorkflowTemplate `argocd-diagnose`, y consulta los workflows existentes para no
+# lanzar dos veces el mismo diagnostico.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webhook
+  namespace: apps
+  labels:
+    app: webhook
+    owner: platform
+    environment: lab
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: webhook-workflow-trigger
+  namespace: argo
+  labels:
+    app: webhook
+    owner: platform
+    environment: lab
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows"]
+    verbs: ["create", "get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: webhook-workflow-trigger
+  namespace: argo
+  labels:
+    app: webhook
+    owner: platform
+    environment: lab
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: webhook-workflow-trigger
+subjects:
+  - kind: ServiceAccount
+    name: webhook
+    namespace: apps

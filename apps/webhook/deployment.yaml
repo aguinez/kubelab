@@ -19,6 +19,7 @@ spec:
         owner: platform
         environment: lab
     spec:
+      serviceAccountName: webhook
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -29,6 +30,11 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          env:
+            - name: ARGO_NAMESPACE
+              value: argo
+            - name: WORKFLOW_TEMPLATE
+              value: argocd-diagnose
           readinessProbe:
             httpGet:
               path: /

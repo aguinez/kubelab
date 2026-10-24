@@ -1,0 +1,112 @@
+# Canalizacion de Argo Workflows del diagnostico.
+#
+# Recibe el nombre de la ArgoCD Application (parametro `app`). El PRIMER PASO de
+# la orquestacion es el Deployment creado en este mismo directorio: el paso no
+# repite la logica, sino que invoca el Service `argocd-diagnostician.apps.svc`
+# (el Deployment es quien tiene los RBAC y hace la recoleccion con kubectl) y
+# guarda el informe JSON como artefacto.
+#
+# Se lanza con, p.ej.:
+#   argo submit --from workflowtemplate/argocd-diagnose -n argo -p app=app-error-test
+#   (o creando un objeto Workflow con workflowTemplateRef; eso hace el webhook)
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: argocd-diagnose
+  namespace: argo
+  labels:
+    app: argocd-diagnose
+    owner: platform
+    environment: lab
+spec:
+  entrypoint: diagnose
+  # SA de los pods del workflow: necesita crear workflowtaskresults (ver rbac.yaml).
+  serviceAccountName: argocd-diagnostician
+  arguments:
+    parameters:
+      - name: app
+      - name: serviceUrl
+        value: http://argocd-diagnostician.apps.svc.cluster.local
+  ttlStrategy:
+    secondsAfterCompletion: 3600
+  podGC:
+    strategy: OnPodCompletion
+  templates:
+    - name: diagnose
+      steps:
+        # PRIMER PASO: invoca el Deployment de diagnostico (recibe el nombre de
+        # la application, revisa los objetos de la app de ArgoCD, recolecta con
+        # kubectl y prepara el request adicional hacia el endpoint no definido).
+        - - name: collect-diagnostics
+            template: diagnostician
+        # Siguiente paso: entrega del informe al endpoint (aun no definido).
+        - - name: forward-report
+            template: forward-report
+            arguments:
+              artifacts:
+                - name: report
+                  from: "{{steps.collect-diagnostics.outputs.artifacts.report}}"
+
+    - name: diagnostician
+      container:
+        image: kubelab/argocd-diagnostician:1.0.0
+        imagePullPolicy: IfNotPresent
+        command: ["python", "/app/diagnostician.py"]
+        args:
+          - "--via-service"
+          - "{{workflow.parameters.serviceUrl}}"
+          - "--app"
+          - "{{workflow.parameters.app}}"
+          - "--output"
+          - "/tmp/report.json"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          privileged: false
+          capabilities:
+            drop:
+              - ALL
+      outputs:
+        artifacts:
+          - name: report
+            path: /tmp/report.json
+
+    - name: forward-report
+      inputs:
+        artifacts:
+          - name: report
+            path: /tmp/report.json
+      container:
+        image: kubelab/argocd-diagnostician:1.0.0
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-c"]
+        args:
+          - |
+            echo "[forward-report] informe preparado por el diagnostico:"
+            cat /tmp/report.json
+            echo
+            echo "[forward-report] el endpoint de reporte aun no esta definido;"
+            echo "[forward-report] cuando exista, este paso enviara el body del informe."
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          privileged: false
+          capabilities:
+            drop:
+              - ALL

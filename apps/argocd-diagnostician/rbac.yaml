@@ -1,0 +1,117 @@
+# RBAC del diagnostico.
+#
+# El diagnostico necesita, dentro del MISMO cluster:
+#   - leer las ArgoCD Applications (para recorrer status.resources)
+#   - leer pods / deployments / replicasets / statefulsets / daemonsets / jobs
+#   - leer los logs de los pods y los eventos del namespace
+# Son operaciones de solo lectura (get/list/watch), nada de escritura.
+#
+# Se crean dos ServiceAccounts con el mismo nombre en namespaces distintos:
+#   - apps/argocd-diagnostician  -> lo usa el Deployment (modo servidor)
+#   - argo/argocd-diagnostician  -> lo usa el primer paso del Workflow
+# Ambas quedan cubiertas por un unico ClusterRoleBinding.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argocd-diagnostician
+  namespace: apps
+  labels:
+    app: argocd-diagnostician
+    owner: platform
+    environment: lab
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argocd-diagnostician
+  namespace: argo
+  labels:
+    app: argocd-diagnostician
+    owner: platform
+    environment: lab
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argocd-diagnostician
+  labels:
+    app: argocd-diagnostician
+    owner: platform
+    environment: lab
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "namespaces", "services"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argocd-diagnostician
+  labels:
+    app: argocd-diagnostician
+    owner: platform
+    environment: lab
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: argocd-diagnostician
+subjects:
+  - kind: ServiceAccount
+    name: argocd-diagnostician
+    namespace: apps
+  - kind: ServiceAccount
+    name: argocd-diagnostician
+    namespace: argo
+---
+# RBAC del ejecutor de Argo Workflows.
+#
+# Los pods de un Workflow reportan sus salidas (aqui, el artefacto `report`)
+# creando objetos `workflowtaskresults` en el namespace del workflow. Sin este
+# permiso el paso muere con:
+#   workflowtaskresults.argoproj.io is forbidden: User
+#   "system:serviceaccount:argo:argocd-diagnostician" cannot create ...
+# El chart de argo-workflows crea un Role con este permiso, pero no lo enlaza a
+# un ServiceAccount propio: lo creamos y enlazamos aqui (namespace `argo`).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-workflow-executor
+  namespace: argo
+  labels:
+    app: argocd-diagnostician
+    owner: platform
+    environment: lab
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtaskresults"]
+    verbs: ["create", "patch"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-workflow-executor-argocd-diagnostician
+  namespace: argo
+  labels:
+    app: argocd-diagnostician
+    owner: platform
+    environment: lab
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argo-workflow-executor
+subjects:
+  - kind: ServiceAccount
+    name: argocd-diagnostician
+    namespace: argo
