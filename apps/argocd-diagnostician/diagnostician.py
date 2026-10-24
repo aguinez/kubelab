@@ -32,6 +32,10 @@ Flujo (equivale al "primer paso" de la canalizacion de Argo Workflows):
      por defecto /tmp/report.json), para poder leerlo desde fuera:
         kubectl -n apps exec deploy/argocd-diagnostician -- cat /tmp/report.json
 
+Si la Application ya no existe (una notificacion rezagada, p. ej. ArgoCD podo la
+app antes de que corriera el workflow), el servidor responde 404 y el paso lo
+trata como "saltado": no se rompe la canalizacion por eso.
+
 Modos:
   * servidor (default): HTTP server con GET/POST /diagnose (lo expone el Deployment)
   * cli:                 diagnostician.py --app NAME [--output FILE]
@@ -232,6 +236,10 @@ class KubectlError(RuntimeError):
     pass
 
 
+class KubectlNotFound(KubectlError):
+    """El objeto no existe (kubectl responde NotFound). No es un fallo interno."""
+
+
 def kubectl(args, timeout=KUBECTL_TIMEOUT):
     try:
         return subprocess.run(
@@ -246,7 +254,10 @@ def kubectl(args, timeout=KUBECTL_TIMEOUT):
 def kubectl_json(args, timeout=KUBECTL_TIMEOUT):
     proc = kubectl([*args, "-o", "json"], timeout=timeout)
     if proc.returncode != 0:
-        raise KubectlError(proc.stderr.strip() or f"kubectl {' '.join(args)} fallo")
+        message = proc.stderr.strip() or f"kubectl {' '.join(args)} fallo"
+        if "NotFound" in message:
+            raise KubectlNotFound(message)
+        raise KubectlError(message)
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
@@ -766,6 +777,12 @@ class Handler(BaseHTTPRequestHandler):
         print(f"[diagnostician] diagnosticando application: {application_name}", flush=True)
         try:
             report = diagnose(application_name)
+        except KubectlNotFound as exc:
+            # La Application ya no existe (la notificacion llego despues de que
+            # ArgoCD la podara, por ejemplo): no es un fallo del servicio.
+            print(f"[diagnostician] {application_name}: la Application no existe", flush=True)
+            self._json(404, {"application": application_name, "error": str(exc)})
+            return
         except KubectlError as exc:
             self._json(502, {"application": application_name, "error": str(exc)})
             return
@@ -826,8 +843,27 @@ def call_service(base_url, application_name, timeout=KUBECTL_TIMEOUT):
     """
     url = f"{base_url.rstrip('/')}/diagnose?app={quote(application_name)}"
     request = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            raise
+        # La Application ya no existe: la notificacion llego tarde. No es un
+        # fallo; se devuelve un informe "saltado" para que el workflow no muera
+        # y el paso no se quede sin /tmp/report.json.
+        detail = exc.read().decode("utf-8", "replace")
+        try:
+            detail = json.loads(detail).get("error", detail)
+        except json.JSONDecodeError:
+            pass
+        return {
+            "application": application_name,
+            "skipped": True,
+            "reason": "la Application ya no existe (notificacion rezagada)",
+            "detail": detail,
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 def main():

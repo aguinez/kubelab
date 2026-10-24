@@ -375,6 +375,16 @@ inexistente: el informe lo marcó (`Ready=False`), siguió la cadena
 (`ClusterIssuer/does-not-exist`, `CertificateRequest/...`) y dejó la causa raíz
 en las firmas: `Referenced "ClusterIssuer" not found`.
 
+**Notificaciones rezagadas.** Al borrar el fixture anterior quedó una notificación
+en vuelo: el workflow corrió cuando la Application ya no existía, el `kubectl get
+application` falló y el servidor respondió **502**. Eso hacía dos cosas malas:
+un 502 no describe un "no existe", y el paso del workflow moría
+(`cannot save parameter, does not exist`) por no dejar `/tmp/report.json`. Ahora:
+
+- "not found" es **404** (no 502), y
+- el paso lo trata como informe **saltado** (`skipped: true`) y termina OK, así
+  que una app que ya no existe no rompe la canalización.
+
 ### Construir y cargar la imagen del diagnóstico (repetible)
 ```bash
 docker build --provenance=false --sbom=false -t kubelab/argocd-diagnostician:1.0.0 apps/argocd-diagnostician
@@ -465,6 +475,9 @@ kubectl -n apps delete pod -l app=argocd-diagnostician
     actualiza la imagen en containerd, pero los pods ya en ejecución siguen con
     la vieja, y si el commit no cambia la plantilla del Deployment no hay rollout.
     Hay que recrear el pod (`kubectl delete pod -l ...`) para probar el código nuevo.
+27. **No todo fallo de `kubectl` es un fallo del servicio:** `NotFound` no es un
+    502. Distinguirlo evita que una notificación rezagada (app ya podada) rompa la
+    canalización; el paso debe terminar OK y dejar constancia de que se saltó.
 
 ---
 
