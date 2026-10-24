@@ -40,12 +40,14 @@ spec:
         - - name: collect-diagnostics
             template: diagnostician
         # Siguiente paso: entrega del informe al endpoint (aun no definido).
+        # El informe se pasa como parametro (no como artefacto): asi el workflow
+        # no necesita un repositorio de artefactos (MinIO/S3) configurado.
         - - name: forward-report
             template: forward-report
             arguments:
-              artifacts:
+              parameters:
                 - name: report
-                  from: "{{steps.collect-diagnostics.outputs.artifacts.report}}"
+                  value: "{{steps.collect-diagnostics.outputs.parameters.report}}"
 
     - name: diagnostician
       container:
@@ -75,26 +77,30 @@ spec:
             drop:
               - ALL
       outputs:
-        artifacts:
+        parameters:
           - name: report
-            path: /tmp/report.json
+            valueFrom:
+              path: /tmp/report.json
 
     - name: forward-report
       inputs:
-        artifacts:
+        parameters:
           - name: report
-            path: /tmp/report.json
       container:
         image: kubelab/argocd-diagnostician:1.0.0
         imagePullPolicy: IfNotPresent
         command: ["sh", "-c"]
         args:
           - |
+            printf '%s' "$REPORT" > /tmp/report.json
             echo "[forward-report] informe preparado por el diagnostico:"
             cat /tmp/report.json
             echo
             echo "[forward-report] el endpoint de reporte aun no esta definido;"
             echo "[forward-report] cuando exista, este paso enviara el body del informe."
+        env:
+          - name: REPORT
+            value: "{{inputs.parameters.report}}"
         resources:
           requests:
             cpu: 10m
