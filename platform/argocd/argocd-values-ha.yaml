@@ -18,12 +18,16 @@ controller:
     replicas: 2
     algorithm: consistent-hashing
   resources:
+    # 512Mi se quedaba corto: con ~13 Applications y el resync agresivo
+    # (--app-resync=60) el controller OOMKill-eaba a mitad de un sync y lo
+    # reiniciaba desde cero, dejando las operaciones en "Running" para siempre.
+    # 1Gi lo estabiliza.
     requests:
       cpu: 10m
-      memory: 128Mi
+      memory: 256Mi
     limits:
       cpu: 200m
-      memory: 512Mi
+      memory: 1Gi
   extraArgs:
     - --status-processors=5
     - --operation-processors=3

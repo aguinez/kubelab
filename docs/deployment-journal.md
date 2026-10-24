@@ -268,6 +268,73 @@ kind load docker-image --name kubelab kubelab/app-error-test:1.0.0 kubelab/webho
 
 ---
 
+## Fase — Canalización de diagnóstico (Argo Workflows)
+
+Fecha: 2026-10-24
+
+### Objetivo
+Siguiendo `task_notification_increment_1.MD`: dejar de solo escribir el log en el
+webhook y hacer que una notificación de ArgoCD **levante una canalización de Argo
+Workflows**. El primer paso recibe el nombre de la Application degradada, revisa
+los objetos que la componen y recolecta evidencia con kubectl (`get`, `describe`,
+`logs`, eventos); reduce esa evidencia a firmas únicas (para no acumular el mismo
+error repetido) y prepara un request adicional hacia un endpoint todavía no
+definido.
+
+### Qué construí
+- `apps/argocd-diagnostician/`: la imagen (Python + kubectl), el Deployment y el
+  Service, los RBAC (ClusterRole de solo lectura sobre Applications, pods, logs,
+  eventos, deployments, ...) y el `WorkflowTemplate` `argocd-diagnose` (namespace
+  `argo`).
+- El primer paso del workflow **invoca el Deployment a través de su Service**
+  (`diagnostician.py --via-service ...`) en vez de duplicar la lógica dentro del
+  pod del workflow; el informe viaja al segundo paso como parámetro.
+- `apps/webhook/`: el webhook dejó de solo loggear; ahora crea un `Workflow` a
+  partir del template (hablando con la API in-cluster, sin kubectl) para la app
+  que llega en la notificación y **no lanza otro si ya hay uno activo** para esa
+  misma app.
+- RBAC nuevos: el SA de los pods del workflow puede crear `workflowtaskresults`
+  y el SA del webhook puede crear/listar workflows en `argo`.
+
+### Errores y cosas que asumí sin comprobar
+- **`HTTPServer` es mono-hilo y con `HTTP/1.1` keep-alive bloquea las sondas.** El
+  pod del diagnóstico arrancaba, respondía `/healthz` con 200 un par de veces y
+  luego readiness/liveness empezaban a dar timeout ("context deadline exceeded")
+  aunque el server siguiera vivo. Lo resolví con `ThreadingHTTPServer`: una
+  conexión atascada bloqueaba a todas las demás.
+- **Después falló el RBAC:** `workflowtaskresults.argoproj.io is forbidden: User
+  "system:serviceaccount:argo:argocd-diagnostician" cannot create resource
+  "workflowtaskresults"`. Los pods de un Workflow reportan sus salidas creando
+  `workflowtaskresults`; el chart de argo-workflows crea el Role con ese permiso
+  pero no lo enlaza a un ServiceAccount propio. Añadí Role + RoleBinding en `argo`.
+- **Asumí que podía usar un artefacto de salida sin repositorio de artefactos.**
+  Error: `artifact storage is not configured`. Como el informe es pequeño (~20KB)
+  lo pasé como **parámetro** (`outputs.parameters` + `valueFrom.path`), que no
+  necesita MinIO/S3.
+- **El controller de ArgoCD (sharding, 2 réplicas) se quedaba en `OOMKilled` con
+  512Mi** a mitad de un sync y lo reiniciaba desde cero: las operaciones de sync
+  quedaban en `Running` para siempre y el `argocd-diagnostician` no llegaba a
+  crearse. Subí el límite a 1Gi. Además el StatefulSet se había quedado en
+  deadlock (no recrea un pod que nunca está Ready): hubo que borrar el pod a mano
+  para que la rolling update arrancara con el límite nuevo.
+
+### Cómo queda funcionando
+- ArgoCD (`app-error-test` en Degraded) → notifications → webhook → crea el
+  Workflow `argocd-diagnose-*` → paso 1 (el Deployment) diagnostica y prepara el
+  request → paso 2 recibe el informe. Verificado de punta a punta:
+  `forward.defined=false` (endpoint aún sin definir) y `signatures=25` con
+  categorías `CrashLoopBackOff`, `ProbeFailed` y `ProgressDeadlineExceeded`.
+- Dedup: un segundo POST mientras hay un workflow activo devuelve
+  `action=skipped`.
+
+### Construir y cargar la imagen del diagnóstico (repetible)
+```bash
+docker build --provenance=false --sbom=false -t kubelab/argocd-diagnostician:1.0.0 apps/argocd-diagnostician
+kind load docker-image --name kubelab kubelab/argocd-diagnostician:1.0.0
+```
+
+---
+
 ## Aprendizajes consolidados hasta ahora
 
 1. **Comprobar el entorno antes de actuar:** permisos (`ls -ld`), contexto
@@ -306,6 +373,24 @@ kind load docker-image --name kubelab kubelab/app-error-test:1.0.0 kubelab/webho
 16. **El ConfigMap de notificaciones puede ser propiedad del repo** habilitando el
     controller con `notifications.enabled=true` y `notifications.cm.create=false`
     en el chart `argo-cd`.
+17. **Un `HTTP_Server` mono-hilo con `protocol_version = HTTP/1.1` se bloquea con
+    las sondas:** una conexión keep-alive atascada impide atender a las demás y
+    readiness/liveness dan timeout aunque el server responda. Usar
+    `ThreadingHTTPServer`.
+18. **Los pods de un Workflow necesitan crear `workflowtaskresults`** en el
+    namespace del workflow para reportar salidas. El chart de argo-workflows crea
+    el Role pero no lo enlaza a un SA propio: hay que crear el RoleBinding.
+19. **`outputs.artifacts` de Argo requiere un repositorio de artefactos** (MinIO/
+    S3). Para pasar datos pequeños (~20KB) entre pasos sin montar uno, usar
+    `outputs.parameters` con `valueFrom.path`.
+20. **Un controller de ArgoCD con memoria justa se OOMKilla a mitad de un sync** y
+    lo reinicia desde cero: las operaciones quedan en `Running` para siempre y no
+    se aplican recursos nuevos. Además, un `StatefulSet` no recrea un pod que
+    nunca llega a `Ready`, así que la rolling update se queda en deadlock: hay que
+    borrar el pod a mano para que arranque con el límite nuevo.
+21. **Evitar repetir el mismo diagnóstico:** deduplicar la evidencia por firma
+    normalizada (timestamps/ids/números colapsados) y no lanzar un workflow nuevo
+    si ya hay uno activo para la misma Application.
 
 ---
 
