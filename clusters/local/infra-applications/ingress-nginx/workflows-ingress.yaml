@@ -1,0 +1,43 @@
+# Ingress + certificado para la UI de Argo Workflows.
+#
+# La UI de las ejecuciones es otro servidor distinto al de ArgoCD: vive en el
+# namespace `argo` (`argo-workflows-server:2746`) y ArgoCD no la muestra en su
+# arbol (los Workflows se crean en caliente y no estan declarados en Git). Se
+# expone bajo el dominio interno del laboratorio para verlos desde el navegador.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argo-workflows-server
+  namespace: argo
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - workflows.lab.test
+      secretName: argo-workflows-server-tls
+  rules:
+    - host: workflows.lab.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argo-workflows-server
+                port:
+                  number: 2746
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: argo-workflows-server-tls
+  namespace: argo
+spec:
+  secretName: argo-workflows-server-tls
+  commonName: workflows.lab.test
+  dnsNames:
+    - workflows.lab.test
+  issuerRef:
+    name: lab-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
