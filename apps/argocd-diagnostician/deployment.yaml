@@ -38,6 +38,10 @@ spec:
             # Endpoint de reporte: aun NO definido. Vacio = solo se prepara el request.
             - name: REPORT_ENDPOINT
               value: ""
+            # El informe queda como archivo dentro del pod, para leerlo con:
+            #   kubectl -n apps exec deploy/argocd-diagnostician -- cat /tmp/report.json
+            - name: REPORT_FILE
+              value: /tmp/report.json
             - name: MAX_LOG_LINES
               value: "200"
             - name: MAX_SIGNATURES

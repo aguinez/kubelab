@@ -22,6 +22,10 @@ Flujo (equivale al "primer paso" de la canalizacion de Argo Workflows):
      reporte que todavia NO esta definido (REPORT_ENDPOINT). Si el endpoint esta
      configurado, se envia; si no, solo se prepara y se deja en el informe.
 
+  6. Deja el informe como archivo dentro del propio contenedor (REPORT_FILE,
+     por defecto /tmp/report.json), para poder leerlo desde fuera:
+        kubectl -n apps exec deploy/argocd-diagnostician -- cat /tmp/report.json
+
 Modos:
   * servidor (default): HTTP server con GET/POST /diagnose (lo expone el Deployment)
   * cli:                 diagnostician.py --app NAME [--output FILE]
@@ -49,6 +53,7 @@ REPORT_METHOD = os.environ.get("REPORT_METHOD", "POST").strip().upper()
 REPORT_TIMEOUT = int(os.environ.get("REPORT_TIMEOUT", "10"))
 KUBECTL_BIN = os.environ.get("KUBECTL_BIN", "kubectl")
 KUBECTL_TIMEOUT = int(os.environ.get("KUBECTL_TIMEOUT", "25"))
+REPORT_FILE = os.environ.get("REPORT_FILE", "/tmp/report.json")
 MAX_LOG_LINES = int(os.environ.get("MAX_LOG_LINES", "200"))
 MAX_SIGNATURES = int(os.environ.get("MAX_SIGNATURES", "25"))
 MAX_SIGNATURE_LEN = int(os.environ.get("MAX_SIGNATURE_LEN", "220"))
@@ -432,6 +437,21 @@ def build_forward(report):
     return forward
 
 
+def persist_report(report):
+    """Deja el informe en un archivo dentro del propio contenedor.
+
+    El pod del Deployment esta siempre Running, asi que el archivo se puede leer
+    con `kubectl exec deploy/argocd-diagnostician -- cat /tmp/report.json`.
+    """
+    try:
+        with open(REPORT_FILE, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, indent=2)
+            fh.write("\n")
+        print(f"[diagnostician] informe escrito en {REPORT_FILE}", flush=True)
+    except OSError as exc:
+        print(f"[diagnostician] no se pudo escribir {REPORT_FILE}: {exc}", flush=True)
+
+
 def diagnose(application_name, argocd_namespace=ARGOCD_NAMESPACE):
     bucket = SignatureBucket(MAX_SIGNATURES)
     application = kubectl_json(["get", "application", application_name, "-n", argocd_namespace])
@@ -493,6 +513,7 @@ def diagnose(application_name, argocd_namespace=ARGOCD_NAMESPACE):
         "resources": inspected,
     }
     report["forward"] = build_forward(report)
+    persist_report(report)
     return report
 
 
