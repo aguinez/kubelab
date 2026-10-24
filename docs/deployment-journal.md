@@ -345,10 +345,45 @@ definido.
   imprimió cada paso. El informe también queda en `describe wf`, bajo
   `Nodes → collect-diagnostics → Outputs → Parameters → report`.
 
+### Afinado: diagnosticar cualquier tipo de recurso
+
+El primer corte solo sabía mirar *workloads* (Deployment, Pod, Job, ...). Para
+cualquier otra cosa —un `Certificate`, un `ExternalSecret`, un `Ingress`— el
+diagnóstico no recolectaba nada: se quedaba en una nota. Y lo que es peor, si
+ArgoCD no le calculaba salud al recurso (le pasa a los CRDs: el Certificate
+aparece en `status.resources` con `status: Synced` y **sin campo `health`**), ni
+siquiera entraba en la rama de la nota: se ignoraba por completo.
+
+Generalicé la recolección a cualquier tipo:
+
+- La salud de un recurso que no es workload se decide por **su propia condición
+  de readiness** (`Ready`, `Available`, `Established`, `Bound`, ...), ignorando
+  las condiciones que en `False` son normales (`Issuing` de cert-manager).
+- Se recolecta `get` + `describe` + condiciones + eventos para **cualquier** kind.
+- Se **sigue la cadena de recursos relacionados** hasta la causa raíz real:
+  `Certificate` → `CertificateRequest` → `Order` → `Challenge`, más el issuer o
+  el secret store referenciados (`issuerRef`, `secretStoreRef`). El error de ACME
+  no está en la Certificate, está más abajo.
+- Se soportan recursos cluster-scoped (`ClusterIssuer`, `ClusterSecretStore`) sin
+  `-n`.
+- Categorías nuevas: `CertIssuanceFailed`, `ExternalSecretSyncFailed`, `NotReady`.
+- RBAC de lectura para `cert-manager.io`, `external-secrets.io` y
+  `networking.k8s.io`.
+
+Verificado de punta a punta con un `Certificate` que apunta a un ClusterIssuer
+inexistente: el informe lo marcó (`Ready=False`), siguió la cadena
+(`ClusterIssuer/does-not-exist`, `CertificateRequest/...`) y dejó la causa raíz
+en las firmas: `Referenced "ClusterIssuer" not found`.
+
 ### Construir y cargar la imagen del diagnóstico (repetible)
 ```bash
 docker build --provenance=false --sbom=false -t kubelab/argocd-diagnostician:1.0.0 apps/argocd-diagnostician
 kind load docker-image --name kubelab kubelab/argocd-diagnostician:1.0.0
+
+# OJO: se reutiliza el tag 1.0.0, asi que `kind load` NO reinicia los pods que ya
+# corren. Si el commit no cambia la plantilla del Deployment, no hay rollout y el
+# pod sigue con la imagen vieja. Para que coja la nueva, recrear el pod:
+kubectl -n apps delete pod -l app=argocd-diagnostician
 ```
 
 ---
@@ -415,6 +450,21 @@ kind load docker-image --name kubelab kubelab/argocd-diagnostician:1.0.0
     registra `BrokenPipeError`) y, tras 3 fallos, la liveness mata el pod. Dar
     margen (`timeoutSeconds`) y tragarse `BrokenPipeError`/`ConnectionResetError`
     en el handler: que un cliente corte la conexión no es un error del servicio.
+23. **ArgoCD no calcula salud para la mayoría de CRDs.** Un `Certificate` aparece
+    en `status.resources` con `status: Synced` y **sin campo `health`**, así que
+    cualquier lógica que dependa de `health` lo ignora. Para recursos que no son
+    workloads hay que leer **sus propias condiciones** (`Ready`, `Available`, ...).
+24. **Ojo con las condiciones que en `False` son normales.** `Issuing=False` en
+    una `Certificate` es lo habitual (no se está emitiendo); tratarla como fallo
+    daría falsos positivos. Hay que ignorarla explícitamente.
+25. **La causa raíz suele estar un nivel más abajo:** el error real de un
+    `Certificate` aparece en su `CertificateRequest`/`Order`/`Challenge`, no en la
+    Certificate. Seguir los `ownerReferences` (y el `issuerRef`/`secretStoreRef`)
+    es lo que da el mensaje útil.
+26. **Reutilizar el tag de la imagen en KinD engaña:** `kind load docker-image`
+    actualiza la imagen en containerd, pero los pods ya en ejecución siguen con
+    la vieja, y si el commit no cambia la plantilla del Deployment no hay rollout.
+    Hay que recrear el pod (`kubectl delete pod -l ...`) para probar el código nuevo.
 
 ---
 
