@@ -9,12 +9,18 @@ Flujo (equivale al "primer paso" de la canalizacion de Argo Workflows):
 
   1. Lee el objeto Application   -> kubectl get application <app> -n argocd -o json
   2. Recorre los objetos que la componen (status.resources) y selecciona los que
-     estan degradados / fuera de sync (pods, deployments, replicasets, ...).
+     estan degradados / fuera de sync. Vale para CUALQUIER tipo de recurso, no
+     solo workloads:
+        - workloads (Deployment, Pod, Job, ...) -> se mira su status de rollout
+        - otros (Certificate, ExternalSecret, Ingress, Kustomization, ...) -> se
+          mira su condicion de readiness (`Ready`, `Available`, ...)
   3. Recolecta evidencia de cada uno con kubectl:
         - get <kind> <name> -o json
         - describe <kind> <name>
-        - logs (actuales y previos) de los pods
+        - logs (actuales y previos) de los pods, si es un workload
         - eventos relacionados
+        - recursos relacionados (p. ej. Certificate -> CertificateRequest ->
+          Order -> Challenge), porque la causa raiz suele estar ahi
   4. Reduce la evidencia cruda a un conjunto pequeno de firmas unicas
      (normalizando timestamps, ids y numeros) para NO acumular el mismo error
      repetido N veces.
@@ -69,6 +75,48 @@ WORKLOAD_KINDS = {
     "CronJob",
 }
 
+# Recursos que NO viven en un namespace (no se les pasa -n a kubectl).
+CLUSTER_SCOPED = {
+    "ClusterIssuer",
+    "ClusterSecretStore",
+    "ClusterRole",
+    "ClusterRoleBinding",
+    "Namespace",
+    "CertificateSigningRequest",
+}
+
+# Cadena de recursos que se sigue (por ownerReferences) hasta la causa raiz real.
+# p. ej. Certificate -> CertificateRequest -> Order -> Challenge (aqui esta el
+# error de ACME que la propia Certificate no muestra).
+CHILD_KINDS = {
+    "Certificate": ["CertificateRequest", "Order", "Challenge"],
+    "CertificateRequest": ["Order", "Challenge"],
+    "Order": ["Challenge"],
+}
+
+# Condiciones cuyo estado distinto de "True" significa "no esta listo". Es la
+# senal que usan los recursos que no son workloads (Certificate, ExternalSecret,
+# Kustomization, ...). Para workloads se usa `workload_unhealthy`.
+READY_CONDITIONS = {
+    "Ready",
+    "Available",
+    "Established",
+    "Bound",
+    "Accepted",
+    "Valid",
+    "Succeeded",
+    "Synced",
+    "Healthy",
+    "Active",
+}
+
+# Condiciones que en False son normales y NO indican fallo.
+# (`Issuing=False` en una Certificate es lo habitual: no se esta emitiendo.)
+BENIGN_FALSE_CONDITIONS = {"Issuing", "Reconciling"}
+
+FOLLOW_DEPTH = 3
+FOLLOW_LIMIT = 12
+
 # --- Firmas: normalizacion y categorizacion ---------------------------------
 
 TIMESTAMP_RE = re.compile(
@@ -79,6 +127,20 @@ NUM_RE = re.compile(r"\b\d+(?:\.\d+)?(?:[a-zA-Z]{1,3})?\b")
 WS_RE = re.compile(r"\s+")
 
 CATEGORIES = [
+    # Recursos que no son workloads: cert-manager, external-secrets, ...
+    ("CertIssuanceFailed", re.compile(
+        r"FailedIssuance|OrderFailed|ChallengeFailed|ReferencedResourceNotFound|"
+        r"failed to (create|process|finalize) (order|challenge|certificate)|"
+        r"ACME|incorrect (issuer|secret)|certificate .*(not ready|expired|invalid)",
+        re.I,
+    )),
+    ("ExternalSecretSyncFailed", re.compile(
+        r"SecretSyncedError|UpdateFailed|secret ?store .*(not found|error|failed)|"
+        r"cannot (find|get|fetch|read) (the )?secret|ExternalSecret .*(error|not ready)|"
+        r"could not (read|retrieve)",
+        re.I,
+    )),
+    ("NotReady", re.compile(r"\b(Ready|Available|Established|Bound|Valid|Succeeded)=False")),
     ("ImagePullBackOff", re.compile(r"ImagePullBackOff|ErrImagePull|ErrImageNeverPull|manifest unknown", re.I)),
     ("CrashLoopBackOff", re.compile(r"CrashLoopBackOff|Back-off restarting failed container", re.I)),
     ("OOMKilled", re.compile(r"OOMKilled|out of memory", re.I)),
@@ -233,17 +295,48 @@ def ensure_kubeconfig():
 # --- Recoleccion de evidencia ------------------------------------------------
 
 
-def events_for(namespace, name):
+def ns_args(args, namespace, kind=None):
+    """Anade `-n <namespace>` salvo si el recurso es cluster-scoped."""
+    if namespace and kind not in CLUSTER_SCOPED:
+        return [*args, "-n", namespace]
+    return list(args)
+
+
+def events_for(namespace, name, kind=None):
+    if not namespace:
+        return []
+    selector = f"involvedObject.name={name}"
+    if kind:
+        selector += f",involvedObject.kind={kind}"
     try:
-        data = kubectl_json(
-            ["get", "events", "-n", namespace, "--field-selector", f"involvedObject.name={name}"]
-        )
+        data = kubectl_json(["get", "events", "-n", namespace, "--field-selector", selector])
     except KubectlError:
         return []
     out = []
     for event in data.get("items", []):
         out.append(f"{event.get('type')} {event.get('reason')}: {event.get('message')}")
     return out
+
+
+def resource_conditions(obj):
+    return ((obj.get("status") or {}).get("conditions")) or []
+
+
+def conditions_unhealthy(conditions):
+    """Un recurso con una condicion "de readiness" que no esta en True no esta listo.
+
+    Es la senal de los recursos que no son workloads: `Certificate` (Ready,
+    Issuing), `ExternalSecret` (Ready), `Kustomization`/`HelmRelease` (Ready), ...
+    Se ignoran las condiciones que en False son normales.
+    """
+    for condition in conditions:
+        ctype = condition.get("type")
+        if ctype in BENIGN_FALSE_CONDITIONS:
+            continue
+        if ctype in READY_CONDITIONS and condition.get("status") != "True":
+            reason = condition.get("reason") or ""
+            return True, f"{ctype}={condition.get('status')} {reason}".strip()
+    return False, None
 
 
 def pod_logs(pod, namespace, bucket):
@@ -356,44 +449,147 @@ def workload_unhealthy(kind, obj):
     return False, None
 
 
-def inspect_workload(kind, name, namespace, bucket, obj=None):
-    detail = {"workload": f"{kind}/{name}"}
-    if obj is None:
-        try:
-            obj = kubectl_json(["get", kind, name, "-n", namespace])
-        except KubectlError as exc:
-            bucket.add(f"{kind}/{name}", f"no se pudo leer el objeto: {exc}")
-            return {"error": str(exc)}
-
-    template = (obj.get("spec") or {}).get("template") or {}
-    container_specs = (template.get("spec") or {}).get("containers", []) if kind != "Pod" else (obj.get("spec") or {}).get("containers", [])
-    detail["images"] = [c.get("image") for c in container_specs]
-
+def workload_detail(kind, obj):
+    """Datos utiles solo de workloads (imagenes y replicas)."""
+    spec = obj.get("spec") or {}
+    if kind == "Pod":
+        containers = spec.get("containers", [])
+    else:
+        containers = ((spec.get("template") or {}).get("spec") or {}).get("containers", [])
+    detail = {}
+    images = [c.get("image") for c in containers if c.get("image")]
+    if images:
+        detail["images"] = images
     if kind != "Pod":
         status = obj.get("status", {}) or {}
         detail["replicas"] = {
-            "desired": (obj.get("spec") or {}).get("replicas"),
+            "desired": spec.get("replicas"),
             "ready": status.get("readyReplicas"),
             "available": status.get("availableReplicas"),
             "unavailable": status.get("unavailableReplicas"),
         }
-        for condition in status.get("conditions", []) or []:
-            bucket.add(
-                f"condition/{kind}/{name}",
-                f"{condition.get('type')}={condition.get('status')} {condition.get('reason')}: {condition.get('message')}",
-            )
-        bucket.add_text(
-            f"describe/{kind}/{name}",
-            kubectl(["describe", kind, name, "-n", namespace]).stdout,
-            only_relevant=True,
+    return detail
+
+
+def collect_conditions(kind, name, obj, bucket):
+    for condition in resource_conditions(obj):
+        bucket.add(
+            f"condition/{kind}/{name}",
+            f"{condition.get('type')}={condition.get('status')} {condition.get('reason')}: {condition.get('message')}",
         )
 
-    bucket.add_text(f"events/{name}", "\n".join(events_for(namespace, name)))
+
+def describe(kind, name, namespace, bucket):
+    output = kubectl(ns_args(["describe", kind, name], namespace, kind)).stdout
+    bucket.add_text(f"describe/{kind}/{name}", output, only_relevant=True)
+
+
+def collect_events(kind, name, namespace, bucket):
+    if namespace:
+        bucket.add_text(f"events/{kind}/{name}", "\n".join(events_for(namespace, name, kind)))
+
+
+def owned_children(kind, namespace, owner_uid, limit):
+    """Hijos del recurso (por ownerReferences) de los tipos en CHILD_KINDS."""
+    children = []
+    for child_kind in CHILD_KINDS.get(kind, []):
+        if len(children) >= limit:
+            break
+        try:
+            data = kubectl_json(["get", child_kind, "-n", namespace])
+        except KubectlError:
+            continue
+        for item in data.get("items", []):
+            refs = (item.get("metadata") or {}).get("ownerReferences") or []
+            if any(ref.get("uid") == owner_uid for ref in refs):
+                children.append((child_kind, item["metadata"]["name"]))
+                if len(children) >= limit:
+                    break
+    return children
+
+
+def referenced_resources(kind, obj):
+    """Recursos a los que apunta el objeto y que conviene revisar."""
+    spec = obj.get("spec") or {}
+    refs = []
+    if kind == "Certificate":
+        ref = spec.get("issuerRef") or {}
+        if ref.get("name"):
+            refs.append((ref.get("kind") or "Issuer", ref.get("name")))
+    if kind == "ExternalSecret":
+        ref = spec.get("secretStoreRef") or {}
+        if ref.get("name"):
+            refs.append((ref.get("kind") or "SecretStore", ref.get("name")))
+    return refs
+
+
+def follow_related(kind, name, namespace, bucket, obj, depth, seen, limit):
+    """Sigue la cadena de recursos relacionados hasta la causa raiz real.
+
+    p. ej. Certificate -> CertificateRequest -> Order -> Challenge: el error de
+    ACME que explica el fallo esta en el Order/Challenge, no en la Certificate.
+    """
+    if depth <= 0 or len(seen) >= limit:
+        return []
+
+    targets = list(referenced_resources(kind, obj))
+    uid = (obj.get("metadata") or {}).get("uid")
+    if uid and namespace:
+        targets += owned_children(kind, namespace, uid, limit)
+
+    followed = []
+    for child_kind, child_name in targets:
+        key = f"{child_kind}/{child_name}"
+        if key in seen or len(seen) >= limit:
+            continue
+        seen.add(key)
+        followed.append(key)
+        try:
+            child_obj = kubectl_json(ns_args(["get", child_kind, child_name], namespace, child_kind))
+        except KubectlError as exc:
+            bucket.add(key, f"relacionado con {kind}/{name} pero no se pudo leer: {exc}")
+            continue
+        collect_conditions(child_kind, child_name, child_obj, bucket)
+        describe(child_kind, child_name, namespace, bucket)
+        collect_events(child_kind, child_name, namespace, bucket)
+        followed += follow_related(
+            child_kind, child_name, namespace, bucket, child_obj, depth - 1, seen, limit
+        )
+    return followed
+
+
+def inspect_resource(kind, name, namespace, bucket, obj=None):
+    """Recolecta evidencia de CUALQUIER recurso, workload o no.
+
+    Workload  -> get + describe + condiciones + eventos + pods y logs.
+    Otros     -> get + describe + condiciones + eventos + los recursos
+                 relacionados hasta la causa raiz (Certificate, ExternalSecret,
+                 Ingress, Kustomization, ...).
+    """
+    detail = {"resource": f"{kind}/{name}"}
+    if obj is None:
+        try:
+            obj = kubectl_json(ns_args(["get", kind, name], namespace, kind))
+        except KubectlError as exc:
+            bucket.add(f"{kind}/{name}", f"no se pudo leer el objeto: {exc}")
+            return {"error": str(exc)}
+
+    if kind in WORKLOAD_KINDS:
+        detail.update(workload_detail(kind, obj))
+
+    collect_conditions(kind, name, obj, bucket)
+    describe(kind, name, namespace, bucket)
+    collect_events(kind, name, namespace, bucket)
 
     pods = pods_for(kind, name, namespace, obj)
-    detail["pods"] = pods
-    for pod in pods:
-        inspect_pod(pod, namespace, bucket)
+    if pods:
+        detail["pods"] = pods
+        for pod in pods:
+            inspect_pod(pod, namespace, bucket)
+
+    followed = follow_related(kind, name, namespace, bucket, obj, FOLLOW_DEPTH, set(), FOLLOW_LIMIT)
+    if followed:
+        detail["followed"] = followed
     return detail
 
 
@@ -475,26 +671,38 @@ def diagnose(application_name, argocd_namespace=ARGOCD_NAMESPACE):
             "health": res_health,
             "sync": res_sync,
         }
-        relevant = False
-        if kind in WORKLOAD_KINDS and namespace:
-            try:
-                obj = kubectl_json(["get", kind, name, "-n", namespace])
-            except KubectlError as exc:
-                entry["error"] = str(exc)
-                inspected.append(entry)
-                unhealthy += 1
-                continue
+        if not kind or not name:
+            continue
+
+        try:
+            obj = kubectl_json(ns_args(["get", kind, name], namespace, kind))
+        except KubectlError as exc:
+            # No se pudo leer (RBAC, tipo no soportado, ...): se deja constancia.
+            entry["error"] = str(exc)
+            entry["reason"] = "no se pudo leer el objeto"
+            unhealthy += 1
+            inspected.append(entry)
+            continue
+
+        if kind in WORKLOAD_KINDS:
             relevant, reason = workload_unhealthy(kind, obj)
-            if relevant:
-                try:
-                    entry.update(inspect_workload(kind, name, namespace, bucket, obj))
-                except KubectlError as exc:
-                    entry["error"] = str(exc)
-        elif out_of_sync(res_sync) or (res_health not in (None, "", "Healthy")):
-            relevant = True
-            entry["note"] = "recurso fuera de sync o degradado (sin inspeccion de workload)"
+        else:
+            # Recursos que no son workloads (Certificate, ExternalSecret,
+            # Ingress, Kustomization, ...): la senal fiable es su propia
+            # condicion de readiness; si no la traen, se usa la salud de ArgoCD.
+            relevant, reason = conditions_unhealthy(resource_conditions(obj))
+            if not relevant and (out_of_sync(res_sync) or res_health not in (None, "", "Healthy")):
+                relevant = True
+                reason = f"argo: health={res_health} sync={res_sync}"
+
         if not relevant:
             continue
+
+        entry["reason"] = reason
+        try:
+            entry.update(inspect_resource(kind, name, namespace, bucket, obj))
+        except KubectlError as exc:
+            entry["error"] = str(exc)
         unhealthy += 1
         inspected.append(entry)
 

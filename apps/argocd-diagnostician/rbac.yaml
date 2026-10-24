@@ -49,7 +49,25 @@ rules:
     resources: ["jobs", "cronjobs"]
     verbs: ["get", "list"]
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "events", "namespaces", "services"]
+    resources: ["pods", "pods/log", "events", "namespaces", "services", "configmaps"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "ingressclasses"]
+    verbs: ["get", "list"]
+  # cert-manager: la cadena Certificate -> CertificateRequest -> Order -> Challenge
+  # y los issuer/secret referenciados.
+  - apiGroups: ["cert-manager.io"]
+    resources:
+      - certificates
+      - certificaterequests
+      - orders
+      - challenges
+      - issuers
+      - clusterissuers
+    verbs: ["get", "list"]
+  # external-secrets: el ExternalSecret y su SecretStore/ClusterSecretStore.
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets", "secretstores", "clustersecretstores"]
     verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
