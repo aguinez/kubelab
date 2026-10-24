@@ -503,6 +503,15 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "argocd-diagnostician/1.0.0"
 
+    def handle_one_request(self):
+        # Si el cliente (p. ej. la sonda de kubelet) cierra la conexion antes de
+        # que terminemos de escribir la respuesta, no es un fallo del servicio:
+        # se corta en silencio en vez de volcar un traceback.
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+
     def _json(self, code, payload):
         body = json.dumps(payload, indent=2).encode("utf-8")
         self.send_response(code)
