@@ -332,6 +332,13 @@ definido.
   `kubectl -n apps exec deploy/argocd-diagnostician -- cat /tmp/report.json`.
   Ojo: un pod ya **terminado** no se puede `exec`-ear, así que dejar el archivo en
   los pods del workflow no sirve para leerlo después.
+- Las **ejecuciones** se ven en la UI de Argo Workflows, expuesta en
+  `https://workflows.lab.test` (Ingress + Certificate siguiendo el patrón de
+  `argocd.lab.test`). No aparecen en ArgoCD: los `Workflow` se crean en caliente,
+  no están en Git y no llevan la label `argocd.argoproj.io/instance`, así que no
+  pertenecen a ninguna Application (en ArgoCD solo se ve el `WorkflowTemplate`).
+  El server usa `auth-mode server`: hay que pegar un token
+  (`kubectl -n argo create token argo-workflows-server --duration=24h`).
 - Los pods del workflow se **conservan** (quité `podGC: OnPodCompletion`) hasta
   que el `ttlStrategy` (1h) borra el workflow, para poder revisar con
   `kubectl -n argo logs -l workflows.argoproj.io/workflow=<wf> -c main` lo que

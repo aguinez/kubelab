@@ -34,6 +34,7 @@ CoreDNS del cluster resuelve `*.lab.test` → `127.0.0.1` (wildcard) y se expone
 fuera del cluster en el puerto `30535` (NodePort mapeado en el cluster.yaml).
 
 * `argocd.lab.test` — ArgoCD UI
+* `workflows.lab.test` — Argo Workflows UI (ejecuciones de la canalización)
 * `traefik.lab.test` — App demo nginx (ingress-nginx)
 
 ### Configurar tu PC (Windows/WSL2)
@@ -59,7 +60,7 @@ Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses ("172.17.
 Opción B — **hosts manual (simple):** añade a `C:\Windows\System32\drivers\etc\hosts`:
 
 ```text
-127.0.0.1 argocd.lab.test traefik.lab.test
+127.0.0.1 argocd.lab.test workflows.lab.test traefik.lab.test
 ```
 
 Opción C — **script automático:** ejecuta desde WSL:
