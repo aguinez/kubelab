@@ -1,0 +1,17 @@
+# Fixture temporal: un Certificate que NO puede emitirse porque apunta a un
+# ClusterIssuer inexistente. Sirve para comprobar que el diagnosticador
+# recolecta evidencia de recursos que no son workloads.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cert-failure-test
+  namespace: apps
+spec:
+  secretName: cert-failure-test-tls
+  commonName: cert-failure-test.lab.test
+  dnsNames:
+    - cert-failure-test.lab.test
+  issuerRef:
+    name: does-not-exist
+    kind: ClusterIssuer
+    group: cert-manager.io
