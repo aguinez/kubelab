@@ -396,6 +396,12 @@ kind load docker-image --name kubelab kubelab/argocd-diagnostician:1.0.0
 21. **Evitar repetir el mismo diagnóstico:** deduplicar la evidencia por firma
     normalizada (timestamps/ids/números colapsados) y no lanzar un workflow nuevo
     si ya hay uno activo para la misma Application.
+22. **Un `timeoutSeconds` de sonda por defecto (1s) es poco para un servicio Python
+    ocupado:** mientras atiende un `/diagnose` (subprocess + parseo de JSON) puede
+    tardar más de 1s en responder `/healthz`; kubelet cierra la conexión (el server
+    registra `BrokenPipeError`) y, tras 3 fallos, la liveness mata el pod. Dar
+    margen (`timeoutSeconds`) y tragarse `BrokenPipeError`/`ConnectionResetError`
+    en el handler: que un cliente corte la conexión no es un error del servicio.
 
 ---
 
