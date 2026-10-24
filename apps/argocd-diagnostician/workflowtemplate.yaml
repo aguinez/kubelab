@@ -27,10 +27,11 @@ spec:
       - name: app
       - name: serviceUrl
         value: http://argocd-diagnostician.apps.svc.cluster.local
+  # El workflow y sus pods se borran una hora despues de terminar. No se usa
+  # podGC: los pods se conservan para poder revisar los logs de cada paso
+  # (`kubectl -n argo logs <workflow> --all-containers`).
   ttlStrategy:
     secondsAfterCompletion: 3600
-  podGC:
-    strategy: OnPodCompletion
   templates:
     - name: diagnose
       steps:
