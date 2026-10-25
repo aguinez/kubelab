@@ -1,53 +1,53 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: keda
-  namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-spec:
-  project: infra
-  source:
-    repoURL: https://kedacore.github.io/charts
-    chart: keda
-    targetRevision: 2.19.0
-    helm:
-      releaseName: keda
-      values: |
-        operator:
-          replicaCount: 1
-          resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
-        metricsServer:
-          replicaCount: 1
-          resources:
-            requests:
-              cpu: 25m
-              memory: 64Mi
-            limits:
-              cpu: 250m
-              memory: 256Mi
-        webhooks:
-          enabled: true
-          replicaCount: 1
-        rbac:
-          create: true
-        serviceAccount:
-          create: true
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: keda
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true 
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: keda
+#   namespace: argocd
+#   finalizers:
+#     - resources-finalizer.argocd.argoproj.io
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "0"
+# spec:
+#   project: infra
+#   source:
+#     repoURL: https://kedacore.github.io/charts
+#     chart: keda
+#     targetRevision: 2.19.0
+#     helm:
+#       releaseName: keda
+#       values: |
+#         operator:
+#           replicaCount: 1
+#           resources:
+#             requests:
+#               cpu: 50m
+#               memory: 128Mi
+#             limits:
+#               cpu: 500m
+#               memory: 512Mi
+#         metricsServer:
+#           replicaCount: 1
+#           resources:
+#             requests:
+#               cpu: 25m
+#               memory: 64Mi
+#             limits:
+#               cpu: 250m
+#               memory: 256Mi
+#         webhooks:
+#           enabled: true
+#           replicaCount: 1
+#         rbac:
+#           create: true
+#         serviceAccount:
+#           create: true
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: keda
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
+#     syncOptions:
+#       - CreateNamespace=true
+#       - ServerSideApply=true 
