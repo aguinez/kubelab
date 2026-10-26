@@ -25,7 +25,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: diagnostician
-          image: kubelab/argocd-diagnostician:1.0.0
+          image: aguinezf/argocd-diagnostician
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

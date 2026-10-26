@@ -31,7 +31,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: app-error-test
-          image: kubelab/app-error-test:1.0.0
+          image: aguinezf/app-error-test
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
