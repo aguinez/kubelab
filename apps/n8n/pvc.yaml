@@ -1,0 +1,23 @@
+# Almacenamiento de n8n.
+#
+# El POC usa SQLite como base de datos, que en n8n es un ARCHIVO LOCAL
+# (`/home/node/.n8n/database.sqlite`), no un servicio de red. Por eso la
+# persistencia de n8n vive en este PVC de 100Mi ("statefulset muy pequeño de
+# 100mb" del POC): guarda la DB de SQLite junto con la config y las credenciales
+# cifradas de n8n.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-data
+  namespace: apps
+  labels:
+    app: n8n
+    owner: platform
+    environment: lab
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 100Mi

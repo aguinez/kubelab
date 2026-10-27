@@ -1,0 +1,49 @@
+# Ingress + certificado TLS de n8n.
+#
+# Dominio interno del laboratorio. El certificado lo emite el ClusterIssuer
+# `lab-issuer` (PKI interna) y nginx termina el TLS.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: n8n
+  namespace: apps
+  labels:
+    app: n8n
+    owner: platform
+    environment: lab
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - n8n.lab.test
+      secretName: n8n-tls
+  rules:
+    - host: n8n.lab.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n
+                port:
+                  number: 80
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: n8n-tls
+  namespace: apps
+  labels:
+    app: n8n
+    owner: platform
+    environment: lab
+spec:
+  secretName: n8n-tls
+  commonName: n8n.lab.test
+  dnsNames:
+    - n8n.lab.test
+  issuerRef:
+    name: lab-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

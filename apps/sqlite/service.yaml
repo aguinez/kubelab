@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sqlite
+  namespace: apps
+  labels:
+    app: sqlite
+    owner: platform
+    environment: lab
+spec:
+  selector:
+    app: sqlite
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

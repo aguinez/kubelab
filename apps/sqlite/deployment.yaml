@@ -1,0 +1,81 @@
+# sqlite (tier de base de datos del POC).
+#
+# Consola/servidor web de SQLite (`sqlite-web`) que abre el archivo
+# `/data/database.sqlite` del PVC `sqlite-data` y lo expone para inspección.
+# Es el "tier de base de datos" del POC de dos capas (app + db) que se quiere
+# desplegar como infraestructura.
+#
+# La imagen se fija por digest (no existe tag de versión; solo `latest`), lo que
+# cumple la regla de no usar `:latest` y hace el despliegue reproducible.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sqlite
+  namespace: apps
+  labels:
+    app: sqlite
+    owner: platform
+    environment: lab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sqlite
+  template:
+    metadata:
+      labels:
+        app: sqlite
+        owner: platform
+        environment: lab
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: sqlite-web
+          image: coleifer/sqlite-web@sha256:1e5b86237968ed747554f951c6df2fc2fe4bf4ef070b8ca23d553d7f6c6426f7
+          imagePullPolicy: IfNotPresent
+          # El entrypoint de la imagen ya es `sqlite_wsgi -H 0.0.0.0`; solo hay
+          # que pasarle el archivo de base de datos a abrir.
+          args:
+            - /data/database.sqlite
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            privileged: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: sqlite-data

@@ -1,0 +1,21 @@
+# Almacenamiento del tier sqlite.
+#
+# Siguiendo el POC, el tier sqlite se despliega APARTE (su propio PVC de 100Mi).
+# n8n no puede conectar por red a SQLite, así que este volumen NO lo comparte:
+# guarda la base de datos que sirve la consola web del tier sqlite.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sqlite-data
+  namespace: apps
+  labels:
+    app: sqlite
+    owner: platform
+    environment: lab
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 100Mi

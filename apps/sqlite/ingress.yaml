@@ -1,0 +1,46 @@
+# Ingress + certificado TLS de la consola sqlite.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sqlite
+  namespace: apps
+  labels:
+    app: sqlite
+    owner: platform
+    environment: lab
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - sqlite.lab.test
+      secretName: sqlite-tls
+  rules:
+    - host: sqlite.lab.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sqlite
+                port:
+                  number: 80
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sqlite-tls
+  namespace: apps
+  labels:
+    app: sqlite
+    owner: platform
+    environment: lab
+spec:
+  secretName: sqlite-tls
+  commonName: sqlite.lab.test
+  dnsNames:
+    - sqlite.lab.test
+  issuerRef:
+    name: lab-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
