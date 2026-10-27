@@ -39,10 +39,12 @@ spec:
         - name: sqlite-web
           image: coleifer/sqlite-web@sha256:1e5b86237968ed747554f951c6df2fc2fe4bf4ef070b8ca23d553d7f6c6426f7
           imagePullPolicy: IfNotPresent
-          # El entrypoint de la imagen ya es `sqlite_wsgi -H 0.0.0.0`; solo hay
-          # que pasarle el archivo de base de datos a abrir.
-          args:
-            - /data/database.sqlite
+          # La imagen no trae ENTRYPOINT: su CMD es
+          # `sqlite_web -H 0.0.0.0 -x $SQLITE_DATABASE`. La base de datos a
+          # abrir se indica por la env var (no sobreescribimos el CMD).
+          env:
+            - name: SQLITE_DATABASE
+              value: /data/database.sqlite
           ports:
             - name: http
               containerPort: 8080
