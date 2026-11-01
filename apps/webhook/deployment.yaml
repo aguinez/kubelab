@@ -19,22 +19,19 @@ spec:
         owner: platform
         environment: lab
     spec:
-      serviceAccountName: webhook
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
       containers:
         - name: webhook
-          image: kubelab/webhook:1.0.0
+          image: kubelab/webhook:1.1.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080
           env:
-            - name: ARGO_NAMESPACE
-              value: argo
-            - name: WORKFLOW_TEMPLATE
-              value: argocd-diagnose
+            - name: N8N_WEBHOOK_URL
+              value: http://n8n.apps.svc.cluster.local/webhook/argocd-diagnostic
           readinessProbe:
             httpGet:
               path: /

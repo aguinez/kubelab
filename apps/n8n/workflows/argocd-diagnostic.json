@@ -1,0 +1,146 @@
+{
+  "id": "kubelabDiagnose1",
+  "name": "ArgoCD diagnostic -> email draft",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "argocd-diagnostic",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "0a1b2c3d-0001-4a01-9001-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-260, 0],
+      "webhookId": "0a1b2c3d-0001-4a01-9001-0000000000ff"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://argocd-diagnostician.apps.svc.cluster.local/diagnose",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ app: ($json.body && ($json.body.app || $json.body.application)) || 'desconocida' }) }}",
+        "options": {}
+      },
+      "id": "0a1b2c3d-0002-4a02-9002-000000000002",
+      "name": "Diagnostico",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-40, 0],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Eres un ingeniero SRE. A partir de este informe JSON de diagnostico de ArgoCD, redacta un correo de diagnostico en espanol (con asunto y cuerpo), claro y accionable para el equipo. No inventes datos que no esten en el informe.\n\nInforme:\n{{ JSON.stringify($json) }}"
+      },
+      "id": "0a1b2c3d-0003-4a03-9003-000000000003",
+      "name": "LLM - redactar correo",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [180, 0],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {}
+      },
+      "id": "0a1b2c3d-0004-4a04-9004-000000000004",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [180, 200]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const wh = ($('Webhook').first().json || {});\nconst body = wh.body || {};\nconst app = body.app || body.application || 'desconocida';\n\nlet report = {};\ntry { report = $('Diagnostico').first().json || {}; } catch (e) { report = {}; }\n\nlet llmText = '';\ntry {\n  const out = $('LLM - redactar correo').first().json || {};\n  llmText = out.text || out.response || out.output || '';\n} catch (e) { llmText = ''; }\n\nconst signatures = Array.isArray(report.signatures) ? report.signatures.slice(0, 10) : [];\nconst lines = signatures.map((s) => `- [${s.category}] (x${s.count}) ${s.signature}`);\nconst fallback = [\n  `Aplicacion ArgoCD: ${app}`,\n  `health=${report.health || 'desconocido'} sync=${report.sync || 'desconocido'}`,\n  `Recursos analizados: ${report.analyzedResources ?? '?'} | no saludables: ${report.unhealthyResources ?? '?'}`,\n  '',\n  'Firmas relevantes:',\n  ...(lines.length ? lines : ['- (sin firmas)']),\n].join('\\n');\n\nconst llmUsed = Boolean(llmText && String(llmText).trim());\nconst bodyText = llmUsed ? llmText : fallback;\n\nreturn [{ json: {\n  to: 'sre@lab.test',\n  subject: `[kubelab] Diagnostico ArgoCD: ${app}`,\n  body: bodyText,\n  llmUsed,\n  application: app,\n  health: report.health || null,\n  sync: report.sync || null,\n  signatureCount: report.signatureCount ?? null,\n} }];"
+      },
+      "id": "0a1b2c3d-0005-4a05-9005-000000000005",
+      "name": "Componer correo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "0a1b2c3d-0006-4a06-9006-000000000006",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [640, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Diagnostico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diagnostico": {
+      "main": [
+        [
+          {
+            "node": "LLM - redactar correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM - redactar correo": {
+      "main": [
+        [
+          {
+            "node": "Componer correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Componer correo": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "LLM - redactar correo",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "tags": []
+}

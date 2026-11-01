@@ -5,3 +5,10 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+# El workflow vive en Git y se monta como ConfigMap. El hash del nombre hace que
+# un cambio en el workflow cambie el Deployment y provoque un rollout, que
+# reimporta el workflow al arrancar (Git es la fuente de verdad).
+configMapGenerator:
+  - name: n8n-workflows
+    files:
+      - workflows/argocd-diagnostic.json

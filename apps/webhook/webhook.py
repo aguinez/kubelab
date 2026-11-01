@@ -1,34 +1,28 @@
-"""Webhook que recibe las notificaciones de ArgoCD y lanza la canalizacion.
+"""Webhook que recibe las notificaciones de ArgoCD y arranca el proceso en n8n.
 
-Antes solo imprimia en el log el nombre de la aplicacion con problemas. Ahora,
-ademas de registrarlo, crea un objeto `Workflow` a partir del WorkflowTemplate
-`argocd-diagnose` (namespace `argo`), pasandole el nombre de la application como
-parametro. Ese workflow es la canalizacion de diagnostico.
+Antes este webhook imprimia el nombre de la aplicacion con problemas y creaba un
+Workflow de Argo. Ahora el orquestador es n8n: al recibir la notificacion hace
+POST al webhook del workflow `argocd-diagnostic`, que corre el diagnostico
+(argocd-diagnostician) y un paso LLM que redacta el correo de diagnostico.
 
-Se habla directamente con el API server de Kubernetes (in-cluster) usando el
-token del ServiceAccount montado, sin depender de kubectl.
-
-Evita acumular el mismo problema: si ya hay un Workflow activo (Pending/Running)
-para la misma application, no lanza otro.
+El correo NO se envia (en el lab no hay API de correo): n8n lo devuelve en la
+respuesta, este webhook lo registra en su log y ademas queda visible en la
+ejecucion dentro de la UI de n8n.
 """
 
 import json
 import os
-import ssl
 import sys
 import urllib.error
-import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get("PORT", "8080"))
-ARGO_NAMESPACE = os.environ.get("ARGO_NAMESPACE", "argo")
-WORKFLOW_TEMPLATE = os.environ.get("WORKFLOW_TEMPLATE", "argocd-diagnose")
-LABEL_KEY = os.environ.get("WORKFLOW_LABEL_KEY", "kubelab.io/app")
-REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "10"))
-
-SA_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
-ACTIVE_PHASES = ("", "Pending", "Running")
+N8N_WEBHOOK_URL = os.environ.get(
+    "N8N_WEBHOOK_URL",
+    "http://n8n.apps.svc.cluster.local/webhook/argocd-diagnostic",
+)
+REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "90"))
 
 
 def extract_app_name(payload):
@@ -45,86 +39,18 @@ def extract_app_name(payload):
     return None
 
 
-# --- API de Kubernetes (in-cluster) ------------------------------------------
-
-
-def _api_base():
-    host = os.environ.get("KUBERNETES_SERVICE_HOST")
-    if not host:
-        return None
-    port = os.environ.get("KUBERNETES_SERVICE_PORT", "443")
-    return f"https://{host}:{port}"
-
-
-def _ssl_context():
-    cafile = os.path.join(SA_DIR, "ca.crt")
-    if os.path.exists(cafile):
-        return ssl.create_default_context(cafile=cafile)
-    return ssl.create_default_context()
-
-
-def _token():
-    with open(os.path.join(SA_DIR, "token"), encoding="utf-8") as fh:
-        return fh.read().strip()
-
-
-def k8s_request(method, path, body=None):
-    base = _api_base()
-    if not base:
-        raise RuntimeError("no hay variables in-cluster (KUBERNETES_SERVICE_HOST)")
-    data = json.dumps(body).encode("utf-8") if body is not None else None
+def trigger_n8n(payload):
+    """Arranca el workflow de n8n y devuelve (status, json) de su respuesta."""
+    data = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
-        base + path,
+        N8N_WEBHOOK_URL,
         data=data,
-        method=method,
-        headers={
-            "Authorization": f"Bearer {_token()}",
-            "Content-Type": "application/json",
-        },
+        method="POST",
+        headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, context=_ssl_context(), timeout=REQUEST_TIMEOUT) as response:
+    with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
         raw = response.read()
-        return json.loads(raw) if raw else {}
-
-
-def workflows_path():
-    return f"/apis/argoproj.io/v1alpha1/namespaces/{ARGO_NAMESPACE}/workflows"
-
-
-def active_workflow_exists(app_name):
-    selector = urllib.parse.quote(f"{LABEL_KEY}={app_name}")
-    data = k8s_request("GET", f"{workflows_path()}?labelSelector={selector}")
-    for item in data.get("items", []):
-        phase = (item.get("status") or {}).get("phase", "")
-        if phase in ACTIVE_PHASES:
-            return item.get("metadata", {}).get("name")
-    return None
-
-
-def create_workflow(app_name):
-    body = {
-        "apiVersion": "argoproj.io/v1alpha1",
-        "kind": "Workflow",
-        "metadata": {
-            "generateName": f"{WORKFLOW_TEMPLATE}-",
-            "namespace": ARGO_NAMESPACE,
-            "labels": {"app": WORKFLOW_TEMPLATE, LABEL_KEY: app_name},
-        },
-        "spec": {
-            "workflowTemplateRef": {"name": WORKFLOW_TEMPLATE},
-            "arguments": {"parameters": [{"name": "app", "value": app_name}]},
-        },
-    }
-    created = k8s_request("POST", workflows_path(), body)
-    return created.get("metadata", {}).get("name")
-
-
-def trigger_pipeline(app_name):
-    """Devuelve (accion, detalle) segun lo que haya ocurrido."""
-    existing = active_workflow_exists(app_name)
-    if existing:
-        return "skipped", existing
-    return "created", create_workflow(app_name)
+        return response.status, (json.loads(raw) if raw else {})
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -145,7 +71,7 @@ class Handler(BaseHTTPRequestHandler):
         return self.rfile.read(length).decode("utf-8", "replace")
 
     def do_GET(self):
-        self._respond(200, {"status": "ok", "workflowTemplate": WORKFLOW_TEMPLATE, "namespace": ARGO_NAMESPACE})
+        self._respond(200, {"status": "ok", "n8nWebhook": N8N_WEBHOOK_URL})
 
     def do_POST(self):
         raw = self._read_body()
@@ -162,20 +88,22 @@ class Handler(BaseHTTPRequestHandler):
 
         print(f"[webhook] application with problems: {app_name}", flush=True)
         try:
-            action, detail = trigger_pipeline(app_name)
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError, RuntimeError) as exc:
+            status, draft = trigger_n8n(payload)
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
             message = f"{type(exc).__name__}: {exc}"
             if isinstance(exc, urllib.error.HTTPError):
                 message += f" ({exc.read().decode('utf-8', 'replace')})"
-            print(f"[webhook] fallo al lanzar el workflow: {message}", flush=True)
+            print(f"[webhook] fallo al arrancar n8n: {message}", flush=True)
             self._respond(502, {"app": app_name, "error": message})
             return
 
-        if action == "skipped":
-            print(f"[webhook] ya hay un workflow activo para {app_name} ({detail}), no se lanza otro", flush=True)
-        else:
-            print(f"[webhook] workflow lanzado para {app_name}: {detail}", flush=True)
-        self._respond(200, {"app": app_name, "action": action, "workflow": detail})
+        print(f"[webhook] n8n respondio {status}", flush=True)
+        print(
+            "[webhook] correo de diagnostico redactado (NO enviado):\n"
+            + json.dumps(draft, indent=2, ensure_ascii=False),
+            flush=True,
+        )
+        self._respond(200, {"app": app_name, "n8nStatus": status, "email": draft})
 
     def log_message(self, fmt, *args):
         sys.stdout.write("[webhook] " + (fmt % args) + "\n")
@@ -184,6 +112,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     print(f"[webhook] listening on 0.0.0.0:{PORT}", flush=True)
+    print(f"[webhook] n8n webhook: {N8N_WEBHOOK_URL}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 
 

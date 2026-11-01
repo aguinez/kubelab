@@ -38,6 +38,15 @@ spec:
         - name: n8n
           image: docker.n8n.io/n8nio/n8n:2.45.4
           imagePullPolicy: IfNotPresent
+          # La imagen arranca con `exec n8n "$@"`, por eso se sobreescribe el
+          # entrypoint: primero se importa y publica el workflow versionado en
+          # Git y despues se arranca el servidor.
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              n8n import:workflow --input=/workflows/argocd-diagnostic.json || echo "[n8n] import:workflow fallo"
+              n8n publish:workflow --id=kubelabDiagnose1 || echo "[n8n] publish:workflow fallo"
+              exec n8n
           ports:
             - name: http
               containerPort: 5678
@@ -63,6 +72,9 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /home/node/.n8n
+            - name: workflows
+              mountPath: /workflows
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /healthz
@@ -95,3 +107,6 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: n8n-data
+        - name: workflows
+          configMap:
+            name: n8n-workflows
