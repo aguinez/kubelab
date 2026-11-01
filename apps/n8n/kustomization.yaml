@@ -5,10 +5,14 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-# El workflow vive en Git y se monta como ConfigMap. El hash del nombre hace que
-# un cambio en el workflow cambie el Deployment y provoque un rollout, que
-# reimporta el workflow al arrancar (Git es la fuente de verdad).
+  - rbac.yaml
+# El workflow vive en Git y se monta como ConfigMap con nombre estable: el
+# Deployment lo referencia como `n8n-workflows` (un nombre con hash no coincidiria
+# con la referencia del volumen). El entrypoint lo reimporta al arrancar n8n.
 configMapGenerator:
   - name: n8n-workflows
     files:
       - workflows/argocd-diagnostic.json
+      - workflows/diagnose.sh
+generatorOptions:
+  disableNameSuffixHash: true

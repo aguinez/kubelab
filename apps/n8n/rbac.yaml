@@ -1,0 +1,65 @@
+# RBAC de n8n.
+#
+# El flujo `argocd-diagnostic` consulta la API de Kubernetes con kubectl: lee la
+# ArgoCD Application, sus recursos, pods, logs, describe y eventos. Todo es de
+# solo lectura (get/list).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: n8n
+  namespace: apps
+  labels:
+    app: n8n
+    owner: platform
+    environment: lab
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: n8n-diagnostics
+  labels:
+    app: n8n
+    owner: platform
+    environment: lab
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "namespaces", "services"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list"]
+  - apiGroups: ["cert-manager.io"]
+    resources:
+      - certificates
+      - certificaterequests
+      - orders
+      - challenges
+      - issuers
+      - clusterissuers
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: n8n-diagnostics
+  labels:
+    app: n8n
+    owner: platform
+    environment: lab
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: n8n-diagnostics
+subjects:
+  - kind: ServiceAccount
+    name: n8n
+    namespace: apps

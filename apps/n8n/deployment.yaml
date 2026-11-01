@@ -29,6 +29,8 @@ spec:
         owner: platform
         environment: lab
     spec:
+      # La SA le da a n8n permisos de lectura (RBAC) para diagnosticar con kubectl.
+      serviceAccountName: n8n
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -36,7 +38,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: n8n
-          image: docker.n8n.io/n8nio/n8n:2.45.4
+          image: kubelab/n8n:2.45.4
           imagePullPolicy: IfNotPresent
           # La imagen arranca con `exec n8n "$@"`, por eso se sobreescribe el
           # entrypoint: primero se importa y publica el workflow versionado en
