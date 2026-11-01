@@ -71,6 +71,10 @@ spec:
               value: UTC
             - name: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
               value: "true"
+            # n8n v2 deshabilita el nodo executeCommand por defecto; se rehabilita
+            # para que el paso de diagnostico pueda ejecutar kubectl.
+            - name: NODES_EXCLUDE
+              value: "[]"
           volumeMounts:
             - name: data
               mountPath: /home/node/.n8n
