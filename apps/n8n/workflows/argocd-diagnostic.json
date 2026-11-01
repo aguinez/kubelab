@@ -20,7 +20,7 @@
     {
       "parameters": {
         "executeOnce": true,
-        "command": "/bin/sh /workflows/diagnose.sh '{{ $json.body.app }}'"
+        "command": "=/bin/sh /workflows/diagnose.sh '{{ $json.body.app }}'"
       },
       "id": "0a1b2c3d-0002-4a02-9002-000000000002",
       "name": "Diagnostico (kubectl)",
