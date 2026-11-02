@@ -41,11 +41,19 @@ spec:
           image: kubelab/n8n:2.45.4
           imagePullPolicy: IfNotPresent
           # La imagen arranca con `exec n8n "$@"`, por eso se sobreescribe el
-          # entrypoint: primero se importa y publica el workflow versionado en
-          # Git y despues se arranca el servidor.
+          # entrypoint: se importa la credencial del LLM (si hay API key), el
+          # workflow versionado en Git, se publica, y despues arranca el servidor.
           command: ["/bin/sh", "-c"]
           args:
             - |
+              if [ -n "${OPENAI_API_KEY:-}" ]; then
+                cat > /tmp/openai-cred.json <<EOF
+              [{"id":"kubelabOpenAi001","name":"OpenAI (lab)","type":"openAiApi","data":{"apiKey":"$OPENAI_API_KEY"}}]
+              EOF
+                n8n import:credentials --input=/tmp/openai-cred.json || echo "[n8n] import:credentials fallo"
+              else
+                echo "[n8n] OPENAI_API_KEY vacia: el paso LLM usara el fallback (volcado de kubectl)"
+              fi
               n8n import:workflow --input=/workflows/argocd-diagnostic.json || echo "[n8n] import:workflow fallo"
               n8n publish:workflow --id=kubelabDiagnose1 || echo "[n8n] publish:workflow fallo"
               exec n8n
@@ -75,6 +83,15 @@ spec:
             # para que el paso de diagnostico pueda ejecutar kubectl.
             - name: NODES_EXCLUDE
               value: "[]"
+            # API key del LLM. La credencial NO vive en Git: se toma de este
+            # Secret y se importa en n8n al arrancar (ver `args`). `optional`
+            # para que el pod arranque aunque el Secret no exista todavia.
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-openai
+                  key: OPENAI_API_KEY
+                  optional: true
           volumeMounts:
             - name: data
               mountPath: /home/node/.n8n
