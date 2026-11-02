@@ -43,7 +43,10 @@
     },
     {
       "parameters": {
-        "model": "gpt-4o-mini",
+        "model": {
+          "mode": "list",
+          "value": "gpt-5-nano"
+        },
         "options": {}
       },
       "id": "0a1b2c3d-0004-4a04-9004-000000000004",
@@ -61,7 +64,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const app = (($('Webhook').first().json.body) || {}).app || 'desconocida';\n\nlet diag = {};\ntry { diag = $('Diagnostico (kubectl)').first().json || {}; } catch (e) { diag = {}; }\n\nlet llmText = '';\nlet llmError = '';\ntry {\n  const out = $('LLM - redactar correo').first().json || {};\n  llmText = out.text || out.response || out.output || '';\n  if (!llmText && out.error) {\n    llmError = typeof out.error === 'string' ? out.error : JSON.stringify(out.error);\n  }\n} catch (e) { llmError = String(e && e.message ? e.message : e); }\n\nconst stdout = String(diag.stdout || '').trim();\nconst stderr = String(diag.stderr || '').trim();\nconst exitCode = diag.exitCode;\n\nconst fallback = [\n  `Aplicacion ArgoCD: ${app}`,\n  `kubectl exitCode=${exitCode}`,\n  ...(llmError ? [`LLM no disponible: ${llmError}`] : []),\n  '',\n  '--- salida de kubectl ---',\n  stdout || '(sin salida)',\n  ...(stderr ? ['', '--- stderr ---', stderr] : []),\n].join('\\n');\n\nconst llmUsed = Boolean(llmText && String(llmText).trim());\n\nreturn [{ json: {\n  to: 'sre@lab.test',\n  subject: `[kubelab] Diagnostico ArgoCD: ${app}`,\n  body: llmUsed ? llmText : fallback,\n  llmUsed,\n  llmError: llmError || null,\n  application: app,\n  exitCode: exitCode ?? null,\n} }];"
+        "jsCode": "const app = (($('Webhook').first().json.body) || {}).app || 'desconocida';\n\nlet diag = {};\ntry { diag = $('Diagnostico (kubectl)').first().json || {}; } catch (e) { diag = {}; }\n\nlet llmText = '';\nlet llmError = '';\ntry {\n  const out = $('LLM - redactar correo').first().json || {};\n  llmText = out.text || out.response || out.output || '';\n  if (!llmText && out.error) {\n    llmError = typeof out.error === 'string' ? out.error : JSON.stringify(out.error);\n  }\n} catch (e) { llmError = String(e && e.message ? e.message : e); }\n\nconst stdout = String(diag.stdout || '').trim();\nconst stderr = String(diag.stderr || '').trim();\nconst exitCode = diag.exitCode;\n\nconst fallback = [\n  `Aplicacion ArgoCD: ${app}`,\n  `kubectl exitCode=${exitCode}`,\n  ...(llmError ? [`LLM no disponible: ${llmError}`] : []),\n  '',\n  '--- salida de kubectl ---',\n  stdout || '(sin salida)',\n  ...(stderr ? ['', '--- stderr ---', stderr] : []),\n].join('\\n');\n\nconst llmUsed = Boolean(llmText && String(llmText).trim());\nif (!llmUsed && !llmError) { llmError = 'el paso LLM no devolvio texto (revisa credenciales/cuota en la ejecucion de n8n)'; }\n\nreturn [{ json: {\n  to: 'sre@lab.test',\n  subject: `[kubelab] Diagnostico ArgoCD: ${app}`,\n  body: llmUsed ? llmText : fallback,\n  llmUsed,\n  llmError: llmError || null,\n  application: app,\n  exitCode: exitCode ?? null,\n} }];"
       },
       "id": "0a1b2c3d-0005-4a05-9005-000000000005",
       "name": "Componer correo",
