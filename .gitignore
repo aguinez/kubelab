@@ -6,7 +6,7 @@ kubeconfig-*
 # Secrets / credentials
 *.pem
 *.key
-**/secrets/*.yaml
+secrets/
 
 # Local
 .DS_Store
