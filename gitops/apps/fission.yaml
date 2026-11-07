@@ -20,6 +20,9 @@ spec:
         releaseName: fission
         valueFiles:
           - $values/platform/fission/values.yaml
+    - repoURL: https://github.com/aguinez/kubelab.git
+      targetRevision: main
+      path: platform/fission/ingress
   destination:
     server: https://kubernetes.default.svc
     namespace: fission

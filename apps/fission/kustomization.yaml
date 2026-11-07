@@ -4,3 +4,4 @@ resources:
   - environment.yaml
   - package.yaml
   - function.yaml
+  - httptrigger.yaml

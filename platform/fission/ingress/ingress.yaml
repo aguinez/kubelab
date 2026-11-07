@@ -1,0 +1,50 @@
+# Ingress + certificado TLS del router de Fission.
+#
+# El router solo publica las funciones que tienen un HTTPTrigger (v1.27).
+# El Ingress vive en el namespace `fission` porque el backend (svc/router)
+# está ahí. Certificado emitido por el ClusterIssuer `lab-issuer`.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fission-router
+  namespace: fission
+  labels:
+    app: fission
+    owner: platform
+    environment: lab
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - fission.lab.test
+      secretName: fission-router-tls
+  rules:
+    - host: fission.lab.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: router
+                port:
+                  number: 80
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: fission-router-tls
+  namespace: fission
+  labels:
+    app: fission
+    owner: platform
+    environment: lab
+spec:
+  secretName: fission-router-tls
+  commonName: fission.lab.test
+  dnsNames:
+    - fission.lab.test
+  issuerRef:
+    name: lab-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

@@ -1,0 +1,12 @@
+apiVersion: fission.io/v1
+kind: HTTPTrigger
+metadata:
+  name: hello
+  namespace: apps
+spec:
+  relativeurl: /hello
+  methods:
+    - GET
+  functionref:
+    type: name
+    name: hello
