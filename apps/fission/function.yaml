@@ -11,3 +11,7 @@ spec:
     packageref:
       name: hello-py
       namespace: apps
+  InvokeStrategy:
+    StrategyType: execution
+    ExecutionStrategy:
+      ExecutorType: poolmgr
