@@ -1,0 +1,17 @@
+apiVersion: fission.io/v1
+kind: Environment
+metadata:
+  name: python
+  namespace: apps
+spec:
+  version: 3
+  poolsize: 2
+  runtime:
+    image: ghcr.io/fission/python-env:1.35.0
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 192Mi

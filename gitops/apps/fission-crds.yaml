@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fission-crds
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: infra
+  source:
+    repoURL: https://github.com/aguinez/kubelab.git
+    targetRevision: main
+    path: platform/fission/crds
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fission
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=true

@@ -1,0 +1,12 @@
+apiVersion: fission.io/v1
+kind: Package
+metadata:
+  name: hello-py
+  namespace: apps
+spec:
+  environment:
+    name: python
+    namespace: apps
+  deployment:
+    type: literal
+    literal: ZGVmIG1haW4oKToKICAgIHJldHVybiAiSGVsbG8sIHdvcmxkIVxuIgo=

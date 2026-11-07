@@ -1,0 +1,110 @@
+# Fission v1.27.0 en KIND (clúster local) — sin LoadBalancer, sin KEDA.
+serviceType: NodePort
+routerServiceType: NodePort
+imageTag: v1.27.0
+pullPolicy: IfNotPresent
+
+# Las funciones viven en el namespace de workloads del lab.
+defaultNamespace: apps
+additionalFissionNamespaces: []
+createNamespace: false
+
+analytics: false
+gatewayAPI:
+  enabled: false
+mcp:
+  enabled: false
+mqt_keda:
+  enabled: false
+
+persistence:
+  enabled: false
+
+# Requests al mínimo: es un laboratorio en una sola máquina.
+# Los limits dejan margen para picos sin reservar CPU/RAM en el scheduler.
+executor:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+router:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 300m
+      memory: 192Mi
+
+webhook:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+buildermgr:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+kubewatcher:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+timer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+storagesvc:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+canaryDeployment:
+  enabled: false
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+fetcher:
+  resource:
+    cpu:
+      requests: "10m"
+      limits: ""
+    mem:
+      requests: "16Mi"
+      limits: ""

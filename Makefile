@@ -3,14 +3,17 @@ KIND_CLUSTER := kubelab
 KIND_CONTEXT := kind-$(KIND_CLUSTER)
 KUSTOMIZE := kubectl kustomize
 
-.PHONY: help bootstrap validate status destroy
+.PHONY: help bootstrap validate status destroy fission-cli fission-pkg fission-verify
 
 help:
 	@echo "Objetivos disponibles:"
-	@echo "  make bootstrap  - crear cluster + instalar plataforma completa"
-	@echo "  make validate   - validar nodos, pods, certificados, ingress, policies"
-	@echo "  make status     - resumen del estado de la plataforma"
-	@echo "  make destroy    - eliminar el laboratorio por completo"
+	@echo "  make bootstrap     - crear cluster + instalar plataforma completa"
+	@echo "  make validate      - validar nodos, pods, certificados, ingress, policies"
+	@echo "  make status        - resumen del estado de la plataforma"
+	@echo "  make destroy       - eliminar el laboratorio por completo"
+	@echo "  make fission-cli   - instalar el CLI de Fission v1.27.0"
+	@echo "  make fission-pkg   - regenerar el literal base64 del Package desde hello.py"
+	@echo "  make fission-verify - comprobar Fission y listar env/funciones"
 
 bootstrap:
 	@bash bootstrap/kind/create.sh
@@ -113,3 +116,26 @@ destroy:
 	@echo "==> Destruyendo cluster $(KIND_CLUSTER)"
 	@kind delete cluster --name $(KIND_CLUSTER)
 	@echo "==> Laboratorio eliminado"
+
+fission-cli:
+	@bash scripts/install-fission-cli.sh
+
+# Regenera el `literal` (base64) del Package desde apps/fission/hello.py
+fission-pkg:
+	@python3 - <<'EOF'
+import base64, pathlib, re
+src = pathlib.Path("apps/fission/hello.py").read_bytes()
+b64 = base64.b64encode(src).decode()
+pkg = pathlib.Path("apps/fission/package.yaml")
+text = pkg.read_text()
+new, n = re.subn(r"^(\s*literal:\s*).*$", lambda m: m.group(1) + b64, text, flags=re.M)
+if n != 1:
+    raise SystemExit(f"esperaba 1 literal, encontrados {n}")
+pkg.write_text(new)
+print("literal:", b64)
+EOF
+
+fission-verify:
+	@fission check
+	@fission env list --namespace apps
+	@fission function list --namespace apps

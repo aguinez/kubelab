@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fission
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: infra
+  sources:
+    - repoURL: https://github.com/aguinez/kubelab.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://fission.github.io/fission-charts/
+      chart: fission-all
+      targetRevision: 1.27.0
+      helm:
+        releaseName: fission
+        valueFiles:
+          - $values/platform/fission/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fission
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
