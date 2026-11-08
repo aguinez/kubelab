@@ -26,7 +26,7 @@ spec:
       # Valores que KubeBlocks resuelve al crear el Cluster. Se declaran de
       # forma explícita para que el estado deseado en Git coincida con el
       # objeto vivo y ArgoCD lo reporte Synced sin ocultar diferencias.
-      serviceVersion: 1.0.0-beta.8
+      serviceVersion: 1.0.4
       podUpdatePolicy: PreferInPlace
       flatInstanceOrdinal: false
       ordinals: {}
