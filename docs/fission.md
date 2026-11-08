@@ -210,8 +210,11 @@ curl ... https://fission.lab.test/hello   # ~75 ms otra vez
 - **Kyverno en modo Audit**: los `Deployment` que crea el chart no llevan las
   labels `app`/`owner`/`environment` (el chart no permite inyectarlas), así que
   `require-labels` reportará violaciones. No bloquea.
-- `internalAuth` queda habilitado (default del chart). El listener interno del
-  router (8889) exige HMAC y no está expuesto por el Ingress.
+- **`internalAuth` deshabilitado a propósito.** ArgoCD renderiza el chart con
+  `helm template`, donde `lookup` no tiene acceso al clúster: el secret
+  `fission-internal-auth` se regeneraría en cada sync y el executor y los
+  fetchers quedarían con HMAC distintos (`401 Unauthorized` al especializar).
+  Sin multi-tenant se usa la alternativa del chart (aislamiento por namespace).
 
 ## Comandos útiles
 

@@ -17,6 +17,13 @@ mcp:
 mqt_keda:
   enabled: false
 
+# ArgoCD renderiza con `helm template`, donde `lookup` no ve el clúster: el
+# secret de internalAuth se regeneraría en cada sync y executor/fetcher
+# quedarían con HMAC distintos (401 al especializar). Sin multi-tenant, se
+# usa la alternativa del chart (aislamiento por namespace).
+internalAuth:
+  enabled: false
+
 persistence:
   enabled: false
 
