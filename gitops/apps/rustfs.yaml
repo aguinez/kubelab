@@ -15,6 +15,10 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+    # KubeBlocks añade metadatos propios (p. ej. immutable-hash) a los CRs del
+    # addon. ServerSideDiff compara por propiedad de campos en vez de forzar
+    # un diff textual, sin ocultar campos con ignoreDifferences.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: infra
   source:

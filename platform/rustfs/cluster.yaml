@@ -23,6 +23,13 @@ spec:
     - name: rustfs
       componentDef: rustfs-0.1.0
       replicas: 1
+      # Valores que KubeBlocks resuelve al crear el Cluster. Se declaran de
+      # forma explícita para que el estado deseado en Git coincida con el
+      # objeto vivo y ArgoCD lo reporte Synced sin ocultar diferencias.
+      serviceVersion: 1.0.0-beta.8
+      podUpdatePolicy: PreferInPlace
+      flatInstanceOrdinal: false
+      ordinals: {}
       resources:
         requests:
           cpu: 100m
