@@ -4,6 +4,8 @@ metadata:
   name: hello
   namespace: apps
 spec:
+  # Segundos sin tráfico antes de que el pod especializado se recicle.
+  idletimeout: 60
   environment:
     name: python
     namespace: apps

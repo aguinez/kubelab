@@ -157,6 +157,15 @@ specialized pod ... function=hello
 added function service ... serviceHost=10.244.2.16:8888
 ```
 
+El pod especializado **sale del pool**: se le quita el `ownerReferences` y la
+label `managed=true`, así que el ReplicaSet del pool crea otro pod genérico y
+mantiene `poolsize` pods calientes. Por eso con 1 función activa se ven 3 pods
+(2 warm + 1 especializado).
+
+La función declara `spec.idletimeout: 60`, de modo que si no recibe tráfico
+durante un minuto el *idle reaper* del executor borra el pod especializado y
+vuelve a quedarse solo el pool precalentado.
+
 ### Invocación y latencia (Ingress + TLS)
 
 ```bash
