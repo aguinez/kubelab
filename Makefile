@@ -73,7 +73,10 @@ EOF
 	@echo "==> Instalando ArgoCD"
 	@helm repo add argo https://argoproj.github.io/argo-helm 2>/dev/null || true
 	@helm repo update argo 2>/dev/null || true
-	@helm upgrade --install argocd argo/argo-cd -n argocd --version 10.3.0 --set server.extraArgs[0]=--insecure
+	@helm upgrade --install argocd argo/argo-cd -n argocd --version 10.3.0 \
+		--set server.extraArgs[0]=--insecure \
+		--set repoServer.resources.requests.memory=256Mi \
+		--set repoServer.resources.limits.memory=1Gi
 	@kubectl --context $(KIND_CONTEXT) -n argocd rollout status deploy/argocd-server --timeout=240s
 	@kubectl --context $(KIND_CONTEXT) apply -k platform/argocd
 	@echo "==> Configurando GitOps"
