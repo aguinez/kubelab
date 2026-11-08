@@ -162,11 +162,17 @@ label `managed=true`, así que el ReplicaSet del pool crea otro pod genérico y
 mantiene `poolsize` pods calientes. Por eso con 1 función activa se ven 3 pods
 (2 warm + 1 especializado).
 
-La función declara `spec.idletimeout: 60`, de modo que si no recibe tráfico
-durante un minuto el *idle reaper* del executor empieza a drenar y borra el pod
-especializado. El borrado efectivo añade un *drain grace* de 30 s (mínimo del
-executor, para peticiones en vuelo), así que el pod desaparece a los ~90 s y
-vuelve a quedar solo el pool precalentado.
+La función declara `spec.idletimeout: 60`: si no recibe tráfico durante un
+minuto, el *idle reaper* del executor borra el pod especializado y vuelve a
+quedar solo el pool precalentado.
+
+Para que el reciclado sea fiable se usa el plano de datos clásico del router
+(`router.endpointSliceCache.mode: "off"` y
+`executor.functionServices.enabled: false`). Con el camino de EndpointSlices
+(RFC-0002) el router resuelve en su propio índice y **no llama a
+`unTapService`** en el camino caliente: el contador de peticiones activas del
+pod se queda en 1 y el reaper nunca lo considera idle, por lo que el pod
+quedaba vivo indefinidamente.
 
 ### Invocación y latencia (Ingress + TLS)
 
