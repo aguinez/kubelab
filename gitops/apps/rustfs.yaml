@@ -1,0 +1,40 @@
+# RustFS sobre KubeBlocks.
+#
+# Depende de la Application `kubeblocks` (CRDs + operador). El `retry` y
+# `SkipDryRunOnMissingResource` permiten que el primer sync reintente hasta
+# que los CRDs de KubeBlocks estén disponibles.
+#
+# Contenido (platform/rustfs): ComponentDefinition/ComponentVersion del addon
+# vendorizados, el Cluster `rustfs` y el Ingress con TLS interno.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rustfs
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: infra
+  source:
+    repoURL: https://github.com/aguinez/kubelab.git
+    targetRevision: main
+    path: platform/rustfs
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rustfs
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true
+      - ServerSideApply=true

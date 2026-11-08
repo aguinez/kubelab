@@ -34,3 +34,16 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: fission
+---
+# Justificación: namespace del operador KubeBlocks y de sus addons (chart Helm).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kb-system
+---
+# Justificación: instancia RustFS gestionada por KubeBlocks (almacenamiento
+# de objetos S3 para los proyectos, p. ej. predio-atlas).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rustfs

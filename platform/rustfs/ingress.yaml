@@ -1,0 +1,70 @@
+# Exposición de RustFS dentro del dominio interno del laboratorio.
+#
+# KubeBlocks crea el Service `<cluster>-<componente>` = `rustfs-rustfs` con los
+# puertos `api` (9000, S3) y `console` (9001, UI). Se publican con dos hosts:
+#   - rustfs.lab.test     -> consola web
+#   - rustfs-s3.lab.test  -> API S3 (endpoint para las apps)
+#
+# TLS termina en ingress-nginx con un certificado emitido por el ClusterIssuer
+# interno `lab-issuer` (mismo patrón que n8n/sqlite/fission).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rustfs-tls
+  namespace: rustfs
+  labels:
+    app: rustfs
+    owner: platform
+    environment: lab
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  secretName: rustfs-tls
+  commonName: rustfs.lab.test
+  dnsNames:
+    - rustfs.lab.test
+    - rustfs-s3.lab.test
+  issuerRef:
+    name: lab-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rustfs
+  namespace: rustfs
+  labels:
+    app: rustfs
+    owner: platform
+    environment: lab
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - rustfs.lab.test
+        - rustfs-s3.lab.test
+      secretName: rustfs-tls
+  rules:
+    - host: rustfs.lab.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rustfs-rustfs
+                port:
+                  number: 9001
+    - host: rustfs-s3.lab.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rustfs-rustfs
+                port:
+                  number: 9000

@@ -1,0 +1,41 @@
+# Instancia RustFS gestionada por KubeBlocks.
+#
+# Se apoya en el ComponentDefinition `rustfs-0.1.0` vendorizado en addon.yaml.
+# Con 1 réplica RustFS arranca en modo single-node sobre el PVC `data`
+# (el addon lo detecta y usa RUSTFS_VOLUMES=/data). Para modo distribuido
+# basta subir `replicas` (mínimo de nodos de un pool de erasure: 4).
+#
+# El namespace `rustfs` es propio de esta dependencia; ver namespaces.yaml.
+apiVersion: apps.kubeblocks.io/v1
+kind: Cluster
+metadata:
+  name: rustfs
+  namespace: rustfs
+  labels:
+    app: rustfs
+    owner: platform
+    environment: lab
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  terminationPolicy: Delete
+  componentSpecs:
+    - name: rustfs
+      componentDef: rustfs-0.1.0
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+      volumeClaimTemplates:
+        - name: data
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            storageClassName: standard
+            resources:
+              requests:
+                storage: 10Gi

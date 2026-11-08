@@ -1,0 +1,71 @@
+# KubeBlocks: operador de datos que gestiona RustFS.
+#
+# Se instala en dos pasos porque el chart no incluye sus CRDs:
+#   1. kubeblocks-crds: bundle de CRDs vendorizado en platform/kubeblocks/crds.
+#   2. kubeblocks: chart Helm del operador con valores de platform/kubeblocks.
+# Los addons de bases de datos del chart están desactivados; RustFS se
+# instala en su propia Application (rustfs.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubeblocks-crds
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  project: infra
+  source:
+    repoURL: https://github.com/aguinez/kubelab.git
+    targetRevision: main
+    path: platform/kubeblocks/crds
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kb-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubeblocks
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: infra
+  sources:
+    - repoURL: https://apecloud.github.io/helm-charts
+      chart: kubeblocks
+      targetRevision: 1.1.0-beta.13
+      helm:
+        releaseName: kubeblocks
+        valueFiles:
+          - $values/platform/kubeblocks/values.yaml
+    - repoURL: https://github.com/aguinez/kubelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kb-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
