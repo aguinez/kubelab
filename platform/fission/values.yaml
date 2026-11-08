@@ -31,6 +31,9 @@ persistence:
 # Los limits dejan margen para picos sin reservar CPU/RAM en el scheduler.
 executor:
   replicas: 1
+  # Requerido por el modo clásico del router (sin EndpointSlice cache).
+  functionServices:
+    enabled: false
   resources:
     requests:
       cpu: 10m
@@ -41,6 +44,11 @@ executor:
 
 router:
   replicas: 1
+  # Plano de datos clásico (RPC al executor). Con endpointSliceCache "on"
+  # el camino caliente no llama a unTapService y el contador de peticiones
+  # activas del pod se queda a 1: el idle reaper nunca lo recicla.
+  endpointSliceCache:
+    mode: "off"
   resources:
     requests:
       cpu: 10m
