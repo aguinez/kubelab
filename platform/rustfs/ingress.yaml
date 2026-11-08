@@ -1,12 +1,11 @@
 # Exposición de RustFS dentro del dominio interno del laboratorio.
 #
-# KubeBlocks crea el Service `<cluster>-<componente>` = `rustfs-rustfs` con los
-# puertos `api` (9000, S3) y `console` (9001, UI). Se publican con dos hosts:
-#   - rustfs.lab.test     -> consola web (la UI vive en /rustfs/console/)
-#   - rustfs-s3.lab.test  -> API S3 (endpoint para las apps)
+#   - rustfs.lab.test     -> consola + API sobre el puerto 9001 (mismo origen,
+#                            que es lo que espera la UI de RustFS)
+#   - rustfs-s3.lab.test  -> API S3 dedicada sobre el puerto 9000 para las apps
 #
-# TLS termina en ingress-nginx con un certificado emitido por el ClusterIssuer
-# interno `lab-issuer` (mismo patrón que n8n/sqlite/fission).
+# TLS termina en ingress-nginx con un certificado del ClusterIssuer interno
+# `lab-issuer` (mismo patrón que n8n/sqlite/fission).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -16,8 +15,6 @@ metadata:
     app: rustfs
     owner: platform
     environment: lab
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
 spec:
   secretName: rustfs-tls
   commonName: rustfs.lab.test
@@ -29,7 +26,6 @@ spec:
     kind: ClusterIssuer
     group: cert-manager.io
 ---
-# Consola: `/` redirige a la ruta real de la UI de RustFS.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -40,7 +36,6 @@ metadata:
     owner: platform
     environment: lab
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
     nginx.ingress.kubernetes.io/app-root: /rustfs/console/
 spec:
   ingressClassName: nginx
@@ -56,11 +51,10 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: rustfs-rustfs
+                name: rustfs
                 port:
                   number: 9001
 ---
-# API S3: sin redirects, para no interferir con clientes S3.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -70,8 +64,6 @@ metadata:
     app: rustfs
     owner: platform
     environment: lab
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
 spec:
   ingressClassName: nginx
   tls:
@@ -86,6 +78,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: rustfs-rustfs
+                name: rustfs
                 port:
                   number: 9000

@@ -1,52 +1,49 @@
-# RustFS sobre KubeBlocks
+# RustFS (instalación tradicional)
 
-Almacenamiento de objetos compatible con S3, gestionado por **KubeBlocks**.
+Almacenamiento de objetos compatible con S3, desplegado como Deployment normal
+(sin KubeBlocks).
 
-## Estructura
+## Componentes
 
-| Fichero | Qué contiene |
+| Fichero | Contenido |
 |---|---|
-| `addon.yaml` | `ComponentDefinition` + `ComponentVersion` del addon RustFS 0.1.0 y los ConfigMaps de plantilla (namespace `kb-system`). Vendorizados desde el chart oficial. |
-| `cluster.yaml` | Instancia `Cluster` (1 réplica, PVC de 10Gi) en el namespace `rustfs`. |
-| `ingress.yaml` | Ingress + Certificate para la consola y la API S3. |
-| `kustomization.yaml` | Agrupa los tres anteriores. |
+| `pvc.yaml` | PVC `rustfs-data` (10Gi, `standard`). |
+| `deployment.yaml` | Deployment `rustfs` (imagen `rustfs/rustfs:1.0.4`). |
+| `service.yaml` | Service con puertos `api` (9000) y `console` (9001). |
+| `ingress.yaml` | Certificate + Ingress para consola y API. |
 
-El operador KubeBlocks se instala aparte (`gitops/apps/kubeblocks.yaml`), junto
-con el bundle de CRDs vendorizado en `platform/kubeblocks/crds/`.
+## Credenciales
+
+No se guardan en Git. El Deployment lee el Secret `rustfs-credentials`
+(claves `RUSTFS_ACCESS_KEY` y `RUSTFS_SECRET_KEY`) del namespace `rustfs`.
+Hay que crearlo una vez:
+
+```bash
+kubectl -n rustfs create secret generic rustfs-credentials \
+  --from-literal=RUSTFS_ACCESS_KEY=rustfsadmin \
+  --from-literal=RUSTFS_SECRET_KEY=rustfsadmin
+```
+
+> Son las credenciales por defecto documentadas por RustFS y solo válidas para
+> este laboratorio. Cámbialas antes de exponer el servicio fuera del lab.
 
 ## Endpoints
 
 | Host | Puerto | Uso |
 |---|---|---|
-| `https://rustfs.lab.test` | 9001 | Consola web |
-| `https://rustfs-s3.lab.test` | 9000 | API S3 |
+| `https://rustfs.lab.test` | 9001 | Consola (redirige a `/rustfs/console/`) y API S3 |
+| `https://rustfs-s3.lab.test` | 9000 | API S3 dedicada para apps |
 
-## Credenciales
+La consola y el S3 comparten el host `rustfs.lab.test` a propósito: la UI de
+RustFS no soporta bien consola y endpoint en dominios distintos.
 
-KubeBlocks genera la cuenta `root` en el Secret `rustfs-rustfs-account-root`:
+## Acceso directo (si el Ingress diera problemas)
 
-```bash
-export RUSTFS_ACCESS_KEY=$(kubectl -n rustfs get secret rustfs-rustfs-account-root -o jsonpath='{.data.username}' | base64 -d)
-export RUSTFS_SECRET_KEY=$(kubectl -n rustfs get secret rustfs-rustfs-account-root -o jsonpath='{.data.password}' | base64 -d)
-```
-
-## Regenerar el addon vendorizado
-
-Si se actualiza el addon, re-renderizar desde el chart oficial y volver a
-aplicar las anotaciones `argocd.argoproj.io/sync-wave: "-2"` y el
-`namespace: kb-system` del ConfigMap de scripts:
+La consola de RustFS tiene bugs conocidos detrás de reverse proxy. Si la UI no
+carga bien por el dominio, usa acceso directo:
 
 ```bash
-helm repo add kubeblocks-addons https://jihulab.com/api/v4/projects/150246/packages/helm/stable
-helm repo update
-helm template rustfs-addon kubeblocks-addons/rustfs --version 0.1.0 -n kb-system \
-  --set image.registry=docker.io \
-  --set image.repository=rustfs/rustfs \
-  > platform/rustfs/addon.yaml
+kubectl -n rustfs port-forward svc/rustfs 9000:9000 9001:9001
 ```
 
-## Escalado
-
-El ComponentDefinition admite de 1 a 32 réplicas, pero un pool de erasure coding
-no soporta *scale-in* (KubeBlocks lo rechaza). Para pasar a modo distribuido
-sube `replicas` a un número soportado (p. ej. 4).
+Abre `http://localhost:9001/rustfs/console/` y entra por **Key Login**.

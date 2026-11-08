@@ -1,11 +1,7 @@
-# RustFS sobre KubeBlocks.
+# RustFS en instalación tradicional (Deployment + PVC + Service + Ingress).
 #
-# Depende de la Application `kubeblocks` (CRDs + operador). El `retry` y
-# `SkipDryRunOnMissingResource` permiten que el primer sync reintente hasta
-# que los CRDs de KubeBlocks estén disponibles.
-#
-# Contenido (platform/rustfs): ComponentDefinition/ComponentVersion del addon
-# vendorizados, el Cluster `rustfs` y el Ingress con TLS interno.
+# Sustituye al despliegue anterior basado en KubeBlocks. El Secret con las
+# credenciales (`rustfs-credentials`) se crea fuera de Git.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -15,10 +11,6 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "0"
-    # KubeBlocks añade metadatos propios (p. ej. immutable-hash) a los CRs del
-    # addon. ServerSideDiff compara por propiedad de campos en vez de forzar
-    # un diff textual, sin ocultar campos con ignoreDifferences.
-    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: infra
   source:
@@ -32,13 +24,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    retry:
-      limit: 10
-      backoff:
-        duration: 15s
-        factor: 2
-        maxDuration: 3m
     syncOptions:
       - CreateNamespace=true
-      - SkipDryRunOnMissingResource=true
-      - ServerSideApply=true

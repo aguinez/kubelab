@@ -1,7 +1,0 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-# CRDs de KubeBlocks v1.1.0-beta.13, vendorizados desde el release oficial:
-#   https://github.com/apecloud/kubeblocks/releases/download/v1.1.0-beta.13/kubeblocks_crds.yaml
-# El chart Helm del operador NO incluye los CRDs; hay que aplicarlos antes.
-resources:
-  - kubeblocks_crds.yaml
