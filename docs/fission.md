@@ -163,8 +163,10 @@ mantiene `poolsize` pods calientes. Por eso con 1 función activa se ven 3 pods
 (2 warm + 1 especializado).
 
 La función declara `spec.idletimeout: 60`, de modo que si no recibe tráfico
-durante un minuto el *idle reaper* del executor borra el pod especializado y
-vuelve a quedarse solo el pool precalentado.
+durante un minuto el *idle reaper* del executor empieza a drenar y borra el pod
+especializado. El borrado efectivo añade un *drain grace* de 30 s (mínimo del
+executor, para peticiones en vuelo), así que el pod desaparece a los ~90 s y
+vuelve a quedar solo el pool precalentado.
 
 ### Invocación y latencia (Ingress + TLS)
 
