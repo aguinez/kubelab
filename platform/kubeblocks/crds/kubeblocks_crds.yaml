@@ -420,6 +420,8 @@ spec:
                       x-kubernetes-list-map-keys:
                       - key
                       x-kubernetes-list-type: map
+                    description:
+                      type: string
                     exporter:
                       properties:
                         containerName:
@@ -21573,6 +21575,8 @@ spec:
                               type: object
                             type: array
                         type: object
+                      description:
+                        type: string
                       timeWindowSeconds:
                         format: int32
                         type: integer
@@ -21608,6 +21612,8 @@ spec:
                         properties:
                           defaultValue:
                             type: string
+                          description:
+                            type: string
                           name:
                             type: string
                         required:
@@ -21622,6 +21628,9 @@ spec:
                   - name
                   type: object
                 type: array
+              description:
+                maxLength: 256
+                type: string
               disableDefaultHeadlessService:
                 default: false
                 type: boolean
@@ -27644,6 +27653,8 @@ spec:
                         properties:
                           defaultValue:
                             type: string
+                          description:
+                            type: string
                           name:
                             type: string
                         required:
@@ -28572,6 +28583,9 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
+              description:
+                maxLength: 256
+                type: string
               exporter:
                 properties:
                   containerName:
@@ -46957,6 +46971,8 @@ spec:
                         properties:
                           defaultValue:
                             type: string
+                          description:
+                            type: string
                           name:
                             type: string
                         required:
@@ -47642,6 +47658,8 @@ spec:
                       items:
                         properties:
                           defaultValue:
+                            type: string
+                          description:
                             type: string
                           name:
                             type: string
@@ -52508,6 +52526,8 @@ spec:
               cliPlugins:
                 items:
                   properties:
+                    description:
+                      type: string
                     indexRepository:
                       type: string
                     name:
@@ -52618,6 +52638,8 @@ spec:
                   type: object
                 minItems: 1
                 type: array
+              description:
+                type: string
               helm:
                 properties:
                   chartLocationURL:
@@ -59396,6 +59418,8 @@ spec:
                             properties:
                               defaultValue:
                                 type: string
+                              description:
+                                type: string
                               name:
                                 type: string
                             required:
@@ -60584,6 +60608,8 @@ spec:
                           - Update
                           - Deletion
                           type: string
+                        description:
+                          type: string
                         eventAttributes:
                           properties:
                             name:
@@ -60709,6 +60735,8 @@ spec:
                           - Creation
                           - Update
                           - Deletion
+                          type: string
+                        description:
                           type: string
                         eventAttributes:
                           properties:
@@ -60849,6 +60877,8 @@ spec:
                               - Creation
                               - Update
                               - Deletion
+                              type: string
+                            description:
                               type: string
                             eventAttributes:
                               properties:
