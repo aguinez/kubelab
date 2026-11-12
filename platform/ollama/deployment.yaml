@@ -1,0 +1,113 @@
+# Ollama sirviendo el modelo k8s_Qwen2.5-0.5B-Instruct (GGUF) para kagent.
+#
+# El init container descarga el GGUF una sola vez al PVC; el contenedor
+# principal arranca `ollama serve` y crea el modelo `k8s-qwen` si no existe.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: kagent
+  labels:
+    app: ollama
+    owner: platform
+    environment: lab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+        owner: platform
+        environment: lab
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      initContainers:
+        - name: download-model
+          image: curlimages/curl:8.10.1
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - |
+              if [ ! -s /data/k8s.gguf ]; then
+                echo "descargando k8s.gguf..."
+                curl -fL --retry 3 --retry-delay 5 -o /data/k8s.gguf \
+                  "https://huggingface.co/chowmean/k8s_Qwen2.5-0.5B-Instruct/resolve/main/k8s.gguf"
+              fi
+              ls -lh /data/k8s.gguf
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: ollama
+          image: ollama/ollama:0.40.16
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HOME
+              value: /data
+            - name: OLLAMA_HOST
+              value: "0.0.0.0:11434"
+            - name: OLLAMA_MODELS
+              value: /data/models
+            - name: OLLAMA_KEEP_ALIVE
+              value: 24h
+          command: ["sh", "-c"]
+          args:
+            - |
+              ollama serve &
+              PID=$!
+              until ollama list >/dev/null 2>&1; do sleep 1; done
+              if ! ollama list | awk '{print $1}' | grep -qx k8s-qwen; then
+                printf 'FROM /data/k8s.gguf\nPARAMETER stop "<|im_end|>"\nPARAMETER stop "<|endoftext|>"\n' > /tmp/Modelfile
+                ollama create k8s-qwen -f /tmp/Modelfile
+              fi
+              ollama list
+              wait $PID
+          ports:
+            - name: http
+              containerPort: 11434
+          readinessProbe:
+            httpGet:
+              path: /api/tags
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/tags
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: ollama-data

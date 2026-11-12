@@ -21,16 +21,23 @@ oficial **0.10.6** (`oci://ghcr.io/kagent-dev/kagent/helm`).
 - cert-manager (`ClusterIssuer/lab-issuer`) e ingress-nginx.
 - StorageClass `standard` para el PostgreSQL bundled.
 
-## Secret del LLM (fuera de Git)
+## LLM local (Ollama)
 
-El chart espera el Secret `kagent-openai` con la clave `OPENAI_API_KEY`:
+kagent usa Ollama (`platform/ollama/`) con el modelo `k8s-qwen`
+(`chowmean/k8s_Qwen2.5-0.5B-Instruct`, GGUF de 506 MiB). El provider se
+configura en `clusters/local/infra-applications/kagent/values-kind.yaml`:
 
-```bash
-kubectl -n kagent create secret generic kagent-openai \
-  --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY"
+```yaml
+providers:
+  default: ollama
+  ollama:
+    provider: Ollama
+    model: k8s-qwen
+    config:
+      host: ollama.kagent.svc:11434
 ```
 
-Sin la clave el controlador y la UI levantan, pero los agentes no responden.
+No hace falta API key.
 
 ## Acceso
 
