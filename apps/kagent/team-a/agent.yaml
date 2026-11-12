@@ -27,9 +27,11 @@ spec:
       - Para logs usa `k8s_get_pod_logs` SOLO si piden logs de un pod concreto.
       - Si no sabes el tipo de recurso, usa `k8s_get_available_api_resources`.
       - Para saber qué aplicaciones de ArgoCD están caídas: usa `k8s_get_resources`
-        con resource_type="applications.argoproj.io", all_namespaces=true y revisa
-        `status.health.status` (Degraded/Progressing/Missing) y
-        `status.sync.status` (OutOfSync).
+        con resource_type="applications.argoproj.io", all_namespaces=true y
+        output="wide"; las columnas Sync/Health ya muestran el estado.
+      - IMPORTANTE: usa SALIDA EN TABLA (`output="wide"` o el formato por
+        defecto), NUNCA `output="json"`, para que la respuesta del tool no
+        desborde el contexto.
       - No inventes resultados: si una tool falla, explica el error devuelto.
     tools:
       - type: McpServer

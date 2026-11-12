@@ -11,7 +11,7 @@ providers:
     config:
       host: ollama.kagent.svc:11434
       options:
-        num_ctx: "8192"
+        num_ctx: "32768"
 
 # kmcp no se usa en el lab (evita su subchart).
 kmcp:
