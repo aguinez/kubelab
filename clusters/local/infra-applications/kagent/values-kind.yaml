@@ -6,6 +6,10 @@ global:
 kmcp:
   enabled: false
 
+# No hay Grafana en el lab: su MCP solo generaría errores de conexión.
+grafana-mcp:
+  enabled: false
+
 database:
   postgres:
     bundled:
