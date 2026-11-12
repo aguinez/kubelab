@@ -1,0 +1,32 @@
+# Agente del Team A (CRD Agent de kagent).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kagent-team-a
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: infra
+  source:
+    repoURL: https://github.com/aguinez/kubelab.git
+    targetRevision: main
+    path: apps/kagent/team-a
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kagent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true

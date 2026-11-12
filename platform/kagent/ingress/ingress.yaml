@@ -1,0 +1,53 @@
+# Ingress + TLS interno para la UI de kagent.
+#
+# Mismo patrón que n8n/rustfs: certificado emitido por el ClusterIssuer interno
+# `lab-issuer` y terminación TLS en ingress-nginx.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kagent-ui
+  namespace: kagent
+  labels:
+    app: kagent
+    owner: platform
+    environment: lab
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - kagent.lab.test
+      secretName: kagent-ui-tls
+  rules:
+    - host: kagent.lab.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kagent-ui
+                port:
+                  number: 8080
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kagent-ui-tls
+  namespace: kagent
+  labels:
+    app: kagent
+    owner: platform
+    environment: lab
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  secretName: kagent-ui-tls
+  commonName: kagent.lab.test
+  dnsNames:
+    - kagent.lab.test
+  issuerRef:
+    name: lab-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

@@ -1,0 +1,60 @@
+# Overrides de kagent para el cluster KinD del laboratorio.
+global:
+  clusterDomain: cluster.local
+
+# kmcp no se usa en el lab (evita su subchart).
+kmcp:
+  enabled: false
+
+database:
+  postgres:
+    bundled:
+      enabled: true
+      storage: 1Gi
+      storageClassName: standard
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+ui:
+  replicas: 1
+  externalUrl: https://kagent.lab.test
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+
+k8s-agent:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+kagent-tools:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi

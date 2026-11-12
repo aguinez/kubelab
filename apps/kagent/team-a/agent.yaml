@@ -1,0 +1,29 @@
+# Agente del Team A: lectura de Kubernetes con las tools integradas de kagent.
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: team-a-agent
+  namespace: kagent
+  labels:
+    app: kagent
+    owner: platform
+    environment: lab
+spec:
+  description: "Agente del Team A para operaciones básicas de Kubernetes"
+  type: Declarative
+  declarative:
+    modelConfig: default-model-config
+    systemMessage: |
+      Eres un asistente de Kubernetes para el Team A.
+      Puedes leer recursos libremente, pero pregunta antes de modificar o eliminar.
+  tools:
+    - type: McpServer
+      mcpServer:
+        name: kagent-tool-server
+        kind: RemoteMCPServer
+        apiGroup: kagent.dev
+        toolNames:
+          - k8s_get_resources
+          - k8s_describe_resource
+          - k8s_get_pod_logs
+          - k8s_get_events

@@ -1,0 +1,49 @@
+# kagent: controller, UI, tool-server y PostgreSQL bundled (chart OCI 0.10.6).
+#
+# Multi-source:
+#   - chart Helm OCI con los values base (repo) y overrides de Kind.
+#   - path Git con el Ingress/Certificate de la UI.
+#   - ref `$values` para resolver los valueFiles.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kagent
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: infra
+  sources:
+    - repoURL: ghcr.io/kagent-dev/kagent/helm
+      chart: kagent
+      targetRevision: 0.10.6
+      helm:
+        releaseName: kagent
+        valueFiles:
+          - $values/platform/kagent/values.yaml
+          - $values/clusters/local/infra-applications/kagent/values-kind.yaml
+    - repoURL: https://github.com/aguinez/kubelab.git
+      targetRevision: main
+      path: platform/kagent/ingress
+    - repoURL: https://github.com/aguinez/kubelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kagent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

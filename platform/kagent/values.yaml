@@ -1,0 +1,31 @@
+# Valores base de kagent (sin secretos).
+#
+# La API key del LLM vive en el Secret `kagent-openai` (creado fuera de Git).
+providers:
+  default: openAI
+  openAI:
+    apiKeySecretRef: kagent-openai
+    apiKeySecretKey: OPENAI_API_KEY
+    model: gpt-4.1-mini
+
+# Un solo team: apagar los agentes demo que no usamos.
+# (El plan original usaba `agents.defaultAgents`, que no existe en 0.10.6.)
+argo-rollouts-agent:
+  enabled: false
+cilium-debug-agent:
+  enabled: false
+cilium-manager-agent:
+  enabled: false
+cilium-policy-agent:
+  enabled: false
+helm-agent:
+  enabled: false
+istio-agent:
+  enabled: false
+kgateway-agent:
+  enabled: false
+observability-agent:
+  enabled: false
+promql-agent:
+  enabled: false
+# Se mantienen k8s-agent y kagent-tools (herramientas de Kubernetes).
