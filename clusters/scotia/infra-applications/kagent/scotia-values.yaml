@@ -1,0 +1,206 @@
+# =============================================================================
+# scotia-values.yaml — valores completos de kagent para el entorno Scotia
+# =============================================================================
+# Imágenes por defecto (upstream) fijadas en duro, para que el archivo sea
+# explícito y solo haya que cambiar registry/repository/tag cuando se migre a
+# un registro privado.
+#
+# Uso como valueFile adicional de la Application de kagent en Scotia (después
+# del values base si se reutiliza):
+#
+#   helm:
+#     valueFiles:
+#       - $values/platform/kagent/values.yaml
+#       - $values/clusters/scotia/infra-applications/kagent/scotia-values.yaml
+#
+# Para un registro privado, sustituye en cada bloque:
+#   registry: ghcr.io  ->  registry.tu-dominio/kagent
+#   repository: kagent-dev/kagent/<componente>  ->  <ruta-en-tu-registro>
+# y rellena imagePullSecrets / global.imagePullSecrets.
+# =============================================================================
+
+# Defaults globales de imagen.
+registry: ghcr.io
+tag: "0.10.6"
+imagePullPolicy: IfNotPresent
+
+# Pull secrets (vacío mientras se usen imágenes públicas).
+imagePullSecrets: []
+
+# -----------------------------------------------------------------------------
+# Ajustes generales (equivalentes a values-kind.yaml)
+# -----------------------------------------------------------------------------
+global:
+  clusterDomain: cluster.local
+  imagePullSecrets: []
+
+# LLM (mismo esquema que el lab: Gemini).
+providers:
+  default: gemini
+  gemini:
+    provider: Gemini
+    model: gemini-3.5-flash-lite
+    apiKeySecretRef: gemini-api-secret
+    apiKeySecretKey: GOOGLE_API_KEY
+
+# Sin kmcp ni Grafana MCP en este entorno (imágenes por defecto declaradas).
+kmcp:
+  enabled: false
+  # El helper de kmcp usa `repository` como imagen completa.
+  image:
+    repository: ghcr.io/kagent-dev/kmcp/controller
+    tag: 0.3.0
+    pullPolicy: IfNotPresent
+
+grafana-mcp:
+  enabled: false
+  image:
+    registry: mcp
+    repository: grafana
+    tag: latest
+    pullPolicy: IfNotPresent
+
+# Agentes demo no usados (igual que el values base del lab).
+argo-rollouts-agent:
+  enabled: false
+cilium-debug-agent:
+  enabled: false
+cilium-manager-agent:
+  enabled: false
+cilium-policy-agent:
+  enabled: false
+helm-agent:
+  enabled: false
+istio-agent:
+  enabled: false
+kgateway-agent:
+  enabled: false
+observability-agent:
+  enabled: false
+promql-agent:
+  enabled: false
+
+# -----------------------------------------------------------------------------
+# CORE (imágenes por defecto + recursos)
+# -----------------------------------------------------------------------------
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  image:
+    registry: ghcr.io
+    repository: kagent-dev/kagent/controller
+    tag: 0.10.6
+    pullPolicy: IfNotPresent
+
+  # Agente Python/declarative.
+  agentImage:
+    registry: ghcr.io
+    repository: kagent-dev/kagent/app
+    tag: 0.10.6
+    pullPolicy: IfNotPresent
+    # fullDigest: "sha256:..."   # opcional
+
+  # Agente Go (runtime por defecto de los Agent).
+  goAgentImage:
+    registry: ghcr.io
+    repository: kagent-dev/kagent/golang-adk
+    tag: 0.10.6
+    pullPolicy: IfNotPresent
+
+  # Init container de skills.
+  skillsInitImage:
+    registry: ghcr.io
+    repository: kagent-dev/kagent/skills-init
+    tag: 0.10.6
+    pullPolicy: IfNotPresent
+
+ui:
+  replicas: 1
+  # Ajusta al host real del entorno Scotia.
+  externalUrl: https://kagent.scotia.example
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+  image:
+    registry: ghcr.io
+    repository: kagent-dev/kagent/ui
+    tag: 0.10.6
+    pullPolicy: IfNotPresent
+
+# -----------------------------------------------------------------------------
+# PostgreSQL bundled (imagen por defecto + recursos)
+# -----------------------------------------------------------------------------
+database:
+  postgres:
+    bundled:
+      enabled: true
+      storage: 1Gi
+      storageClassName: standard
+      image:
+        registry: docker.io
+        repository: library
+        tag: 18.6-alpine3.23
+        pullPolicy: IfNotPresent
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+# -----------------------------------------------------------------------------
+# TOOLS / AGENTES (imágenes por defecto + recursos)
+# -----------------------------------------------------------------------------
+# El subchart kagent-tools anida la imagen bajo `tools.image`.
+kagent-tools:
+  tools:
+    image:
+      registry: ghcr.io
+      repository: kagent-dev/kagent/tools
+      tag: 0.3.1
+      pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
+
+k8s-agent:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+# -----------------------------------------------------------------------------
+# COMPONENTES OPCIONALES (deshabilitados; imágenes por defecto declaradas)
+# -----------------------------------------------------------------------------
+oauth2-proxy:
+  image:
+    registry: ""
+    repository: oauth2-proxy/oauth2-proxy
+    tag: 7.15.6
+    pullPolicy: IfNotPresent
+  initContainers:
+    waitForRedis:
+      image:
+        registry: ""
+        repository: alpine
+        tag: latest
+        pullPolicy: IfNotPresent
