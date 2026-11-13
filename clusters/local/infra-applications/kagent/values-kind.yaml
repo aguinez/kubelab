@@ -2,16 +2,14 @@
 global:
   clusterDomain: cluster.local
 
-# LLM local: Ollama sirviendo k8s_Qwen2.5-0.5B-Instruct (platform/ollama).
+# LLM: Gemini (secret `gemini-api-secret` ya existente en el namespace kagent).
 providers:
-  default: ollama
-  ollama:
-    provider: Ollama
-    model: k8s-qwen
-    config:
-      host: ollama.kagent.svc:11434
-      options:
-        num_ctx: "32768"
+  default: gemini
+  gemini:
+    provider: Gemini
+    model: gemini-2.5-flash
+    apiKeySecretRef: gemini-api-secret
+    apiKeySecretKey: GOOGLE_API_KEY
 
 # kmcp no se usa en el lab (evita su subchart).
 kmcp:
